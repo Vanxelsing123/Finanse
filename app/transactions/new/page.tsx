@@ -23,6 +23,7 @@ export default function NewTransactionPage() {
 		amount: '',
 		description: '',
 		date: new Date().toISOString().split('T')[0],
+		type: 'EXPENSE',
 	})
 	const [loading, setLoading] = useState(false)
 	const [loadingCategories, setLoadingCategories] = useState(true)
@@ -55,7 +56,6 @@ export default function NewTransactionPage() {
 		e.preventDefault()
 		setError('')
 
-		// Валидация
 		if (!formData.amount || parseFloat(formData.amount) <= 0) {
 			setError('Введите корректную сумму')
 			return
@@ -77,6 +77,7 @@ export default function NewTransactionPage() {
 					amount: parseFloat(formData.amount),
 					description: formData.description || undefined,
 					date: formData.date,
+					type: formData.type,
 				}),
 			})
 
@@ -86,7 +87,7 @@ export default function NewTransactionPage() {
 				router.push('/dashboard')
 				router.refresh()
 			} else {
-				setError(data.error || 'Ошибка при добавлении траты')
+				setError(data.error || 'Ошибка при добавлении транзакции')
 			}
 		} catch (error) {
 			console.error('Error:', error)
@@ -100,15 +101,15 @@ export default function NewTransactionPage() {
 
 	if (loadingCategories) {
 		return (
-			<div className='min-h-screen flex items-center justify-center'>
+			<div className='min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900'>
 				<div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600'></div>
 			</div>
 		)
 	}
 
 	return (
-		<div className='min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50'>
-			<header className='bg-white shadow-sm'>
+		<div className='min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800'>
+			<header className='bg-white dark:bg-gray-800 shadow-sm'>
 				<div className='container mx-auto px-4 py-4'>
 					<Link href='/dashboard'>
 						<Button variant='ghost' size='sm'>
@@ -120,44 +121,69 @@ export default function NewTransactionPage() {
 			</header>
 
 			<main className='container mx-auto px-4 py-8 max-w-2xl'>
-				<Card>
+				<Card className='dark:bg-gray-800 dark:border-gray-700'>
 					<CardHeader>
-						<CardTitle>Добавить трату</CardTitle>
+						<CardTitle className='dark:text-white'>Добавить транзакцию</CardTitle>
 					</CardHeader>
 					<CardContent>
 						{categories.length === 0 ? (
 							<div className='text-center py-8'>
 								<div className='text-6xl mb-4'>💰</div>
-								<p className='text-gray-600 mb-4'>Сначала создайте бюджет с категориями</p>
+								<p className='text-gray-600 dark:text-gray-300 mb-4'>
+									Сначала создайте бюджет с категориями
+								</p>
 								<Link href='/budget/setup'>
 									<Button>Создать бюджет</Button>
 								</Link>
 							</div>
 						) : (
 							<form onSubmit={handleSubmit} className='space-y-6'>
-								{/* Сумма */}
 								<div>
-									<label className='block text-sm font-medium mb-2'>
+									<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
+										Тип транзакции
+									</label>
+									<div className='flex gap-2'>
+										<Button
+											type='button'
+											variant={formData.type === 'EXPENSE' ? 'default' : 'outline'}
+											onClick={() => setFormData({ ...formData, type: 'EXPENSE' })}
+											className='flex-1 dark:border-gray-600'
+										>
+											💸 Расход
+										</Button>
+										<Button
+											type='button'
+											variant={formData.type === 'INCOME' ? 'default' : 'outline'}
+											onClick={() => setFormData({ ...formData, type: 'INCOME' })}
+											className='flex-1 dark:border-gray-600'
+										>
+											💰 Доход
+										</Button>
+									</div>
+								</div>
+
+								<div>
+									<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
 										Сумма (BYN) <span className='text-red-500'>*</span>
 									</label>
 									<input
 										type='number'
 										value={formData.amount}
 										onChange={e => setFormData({ ...formData, amount: e.target.value })}
-										className='w-full px-4 py-3 border rounded-lg text-2xl font-bold focus:ring-2 focus:ring-blue-500 outline-none text-center'
+										className='w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-2xl font-bold focus:ring-2 focus:ring-blue-500 outline-none text-center bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
 										placeholder='0.00'
 										step='0.01'
 										min='0.01'
 										autoFocus
 									/>
 
-									{/* Быстрые суммы */}
 									<div className='grid grid-cols-3 gap-2 mt-4'>
 										{quickAmounts.map(amount => (
 											<Button
 												key={amount}
 												type='button'
 												variant='outline'
+												className='dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
 												onClick={() =>
 													setFormData(prev => ({
 														...prev,
@@ -171,9 +197,8 @@ export default function NewTransactionPage() {
 									</div>
 								</div>
 
-								{/* Категория */}
 								<div>
-									<label className='block text-sm font-medium mb-3'>
+									<label className='block text-sm font-medium mb-3 text-gray-700 dark:text-gray-200'>
 										Категория <span className='text-red-500'>*</span>
 									</label>
 									<div className='grid grid-cols-2 gap-3'>
@@ -184,46 +209,48 @@ export default function NewTransactionPage() {
 												onClick={() => setFormData({ ...formData, categoryId: category.id })}
 												className={`p-4 border-2 rounded-lg transition ${
 													formData.categoryId === category.id
-														? 'border-blue-500 bg-blue-50'
-														: 'border-gray-200 hover:border-gray-300'
+														? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+														: 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 bg-white dark:bg-gray-700'
 												}`}
 											>
 												<div className='text-3xl mb-2'>{category.icon}</div>
-												<div className='text-sm font-medium'>{category.name}</div>
+												<div className='text-sm font-medium text-gray-900 dark:text-white'>
+													{category.name}
+												</div>
 											</button>
 										))}
 									</div>
 								</div>
 
-								{/* Описание */}
 								<div>
-									<label className='block text-sm font-medium mb-2'>Описание (опционально)</label>
+									<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
+										Описание (опционально)
+									</label>
 									<input
 										type='text'
 										value={formData.description}
 										onChange={e => setFormData({ ...formData, description: e.target.value })}
-										className='w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none'
+										className='w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500'
 										placeholder='Например: Кофе в кафе...'
 										maxLength={200}
 									/>
 								</div>
 
-								{/* Дата */}
 								<div>
-									<label className='block text-sm font-medium mb-2'>
+									<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
 										Дата <span className='text-red-500'>*</span>
 									</label>
 									<input
 										type='date'
 										value={formData.date}
 										onChange={e => setFormData({ ...formData, date: e.target.value })}
-										className='w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none'
+										className='w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
 										max={new Date().toISOString().split('T')[0]}
 									/>
 								</div>
 
 								{error && (
-									<div className='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm'>
+									<div className='bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm'>
 										{error}
 									</div>
 								)}
@@ -234,7 +261,11 @@ export default function NewTransactionPage() {
 									size='lg'
 									disabled={loading || !formData.categoryId || !formData.amount}
 								>
-									{loading ? 'Добавление...' : 'Добавить трату'}
+									{loading
+										? 'Добавление...'
+										: formData.type === 'EXPENSE'
+										? 'Добавить расход'
+										: 'Добавить доход'}
 								</Button>
 							</form>
 						)}
