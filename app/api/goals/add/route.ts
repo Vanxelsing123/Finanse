@@ -6,8 +6,8 @@ import { z } from 'zod'
 
 const addToGoalSchema = z.object({
 	goalId: z.string(),
-	amount: z.number().positive(),
-	source: z.enum(['MANUAL', 'AUTO', 'FROM_SAVINGS']).default('MANUAL'), // ✅ ИСПРАВЛЕНО
+	amount: z.number(), // ✅ Убрали .positive() чтобы разрешить отрицательные числа
+	source: z.enum(['MANUAL', 'AUTO', 'FROM_SAVINGS']).default('MANUAL'),
 	note: z.string().optional(),
 })
 
@@ -26,7 +26,6 @@ export async function POST(req: NextRequest) {
 			where: {
 				id: goalId,
 				userId: session.user.id,
-				status: 'ACTIVE',
 			},
 			include: {
 				notifications: true,
@@ -39,45 +38,63 @@ export async function POST(req: NextRequest) {
 
 		const oldAmount = Number(goal.currentAmount)
 		const newAmount = oldAmount + amount
+
+		// ✅ Проверка: нельзя снять больше, чем есть
+		if (newAmount < 0) {
+			return NextResponse.json({ error: 'Недостаточно средств для снятия' }, { status: 400 })
+		}
+
 		const targetAmount = Number(goal.targetAmount)
 
 		// Вычисляем процент до и после
 		const oldPercentage = Math.floor((oldAmount / targetAmount) * 100)
 		const newPercentage = Math.floor((newAmount / targetAmount) * 100)
 
-		// Определяем какие уведомления нужно отправить
+		// Определяем какие уведомления нужно отправить (только при добавлении)
 		const milestones = [20, 50, 80, 100]
-		const newMilestones = milestones.filter(m => oldPercentage < m && newPercentage >= m)
+		const newMilestones =
+			amount > 0 ? milestones.filter(m => oldPercentage < m && newPercentage >= m) : []
 
-		// Создаём транзакцию пополнения
+		// Создаём транзакцию
 		await prisma.goalTransaction.create({
 			data: {
 				goalId,
 				amount,
 				source,
-				note,
+				note: note || (amount > 0 ? 'Пополнение' : 'Снятие средств'),
 			},
 		})
 
 		// Обновляем цель
 		const isCompleted = newAmount >= targetAmount
+		const wasCompleted = goal.status === 'COMPLETED'
+
+		// ✅ Если была завершена, но сняли деньги - снова делаем активной
+		const newStatus = isCompleted ? 'COMPLETED' : 'ACTIVE'
+
 		const updatedGoal = await prisma.goal.update({
 			where: { id: goalId },
 			data: {
-				currentAmount: Math.min(newAmount, targetAmount),
-				status: isCompleted ? 'COMPLETED' : 'ACTIVE', // ✅ ИСПРАВЛЕНО
-				completedAt: isCompleted ? new Date() : null,
+				currentAmount: newAmount,
+				status: newStatus,
+				completedAt:
+					isCompleted && !wasCompleted
+						? new Date()
+						: wasCompleted && !isCompleted
+						? null
+						: goal.completedAt,
 			},
 			include: {
 				transactions: {
 					orderBy: {
 						date: 'desc',
 					},
+					take: 10,
 				},
 			},
 		})
 
-		// Создаём уведомления о достижении вех
+		// Создаём уведомления о достижении вех (только при добавлении)
 		if (newMilestones.length > 0) {
 			await prisma.goalNotification.createMany({
 				data: newMilestones.map(milestone => ({
