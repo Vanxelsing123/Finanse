@@ -1,0 +1,162 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// prisma/schema.prisma
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // uncomment next line if you use Prisma <5.10
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String?
+  email         String   @unique
+  password      String
+  currency      String   @default("BYN")
+  monthStartDay Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  budgets      Budget[]
+  transactions Transaction[]
+  goals        Goal[]
+  insights     Insight[]
+}
+
+model Budget {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  month       Int
+  year        Int
+  totalAmount Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  categories Category[]
+
+  @@unique([userId, month, year])
+  @@index([userId])
+}
+
+model Category {
+  id           String   @id @default(cuid())
+  budgetId     String
+  budget       Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  name         String
+  icon         String
+  color        String
+  budgetAmount Decimal  @db.Decimal(10, 2)
+  createdAt    DateTime @default(now())
+
+  transactions Transaction[]
+
+  @@index([budgetId])
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId  String?
+  category    Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  amount      Decimal         @db.Decimal(10, 2)
+  description String?
+  date        DateTime        @default(now())
+  type        TransactionType @default(EXPENSE)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([date])
+}
+
+enum TransactionType {
+  EXPENSE
+  INCOME
+}
+
+model Goal {
+  id            String     @id @default(cuid())
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  targetAmount  Decimal    @db.Decimal(10, 2)
+  currentAmount Decimal    @default(0) @db.Decimal(10, 2)
+  imageUrl      String?
+  priority      Int        @default(1)
+  deadline      DateTime?
+  status        GoalStatus @default(ACTIVE)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  completedAt   DateTime?
+
+  transactions  GoalTransaction[]
+  notifications GoalNotification[]
+
+  @@index([userId])
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+model GoalTransaction {
+  id     String                @id @default(cuid())
+  goalId String
+  goal   Goal                  @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  amount Decimal               @db.Decimal(10, 2)
+  date   DateTime              @default(now())
+  source GoalTransactionSource
+  note   String?
+
+  @@index([goalId])
+}
+
+enum GoalTransactionSource {
+  MANUAL
+  AUTO
+  FROM_SAVINGS
+}
+
+model GoalNotification {
+  id        String   @id @default(cuid())
+  goalId    String
+  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  milestone Int // 20, 50, 80, 100
+  sentAt    DateTime @default(now())
+
+  @@unique([goalId, milestone])
+  @@index([goalId])
+}
+
+model Insight {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      InsightType
+  message   String
+  isRead    Boolean     @default(false)
+  createdAt DateTime    @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+enum InsightType {
+  COMPARISON
+  WARNING
+  PATTERN
+  ACHIEVEMENT
+  FORECAST
+  SUGGESTION
+}
