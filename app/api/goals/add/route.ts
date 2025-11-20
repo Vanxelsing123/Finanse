@@ -7,7 +7,7 @@ import { z } from 'zod'
 const addToGoalSchema = z.object({
 	goalId: z.string(),
 	amount: z.number().positive(),
-	source: z.enum(['manual', 'auto', 'from_savings']).default('manual'),
+	source: z.enum(['MANUAL', 'AUTO', 'FROM_SAVINGS']).default('MANUAL'), // ✅ ИСПРАВЛЕНО
 	note: z.string().optional(),
 })
 
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
 			where: { id: goalId },
 			data: {
 				currentAmount: Math.min(newAmount, targetAmount),
-				status: isCompleted ? 'completed' : 'active',
+				status: isCompleted ? 'COMPLETED' : 'ACTIVE', // ✅ ИСПРАВЛЕНО
 				completedAt: isCompleted ? new Date() : null,
 			},
 			include: {
