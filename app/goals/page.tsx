@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { calculateProgress, formatCurrency, getProgressColor } from '@/lib/utils'
-import { ArrowLeft, Minus, Plus, Target } from 'lucide-react'
+import { ArrowLeft, Calculator, Minus, Plus, Target } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
@@ -16,6 +16,7 @@ interface Goal {
 	priority: number
 	deadline?: string
 	status: string
+	createdAt?: string
 }
 
 export default function GoalsPage() {
@@ -28,6 +29,7 @@ export default function GoalsPage() {
 		name: '',
 		targetAmount: '',
 		priority: 1,
+		years: 1,
 	})
 	const [loading, setLoading] = useState(true)
 
@@ -50,6 +52,10 @@ export default function GoalsPage() {
 	const createGoal = async (e: React.FormEvent) => {
 		e.preventDefault()
 		try {
+			// Рассчитываем дедлайн
+			const deadline = new Date()
+			deadline.setFullYear(deadline.getFullYear() + newGoal.years)
+
 			const response = await fetch('/api/goals', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -57,12 +63,13 @@ export default function GoalsPage() {
 					name: newGoal.name,
 					targetAmount: parseFloat(newGoal.targetAmount),
 					priority: newGoal.priority,
+					deadline: deadline.toISOString(),
 				}),
 			})
 
 			if (response.ok) {
 				setShowNewGoal(false)
-				setNewGoal({ name: '', targetAmount: '', priority: 1 })
+				setNewGoal({ name: '', targetAmount: '', priority: 1, years: 1 })
 				fetchGoals()
 			}
 		} catch (error) {
@@ -122,7 +129,7 @@ export default function GoalsPage() {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					goalId,
-					amount: -amount, // Отрицательная сумма для вычитания
+					amount: -amount,
 					source: 'MANUAL',
 					note: 'Снятие средств',
 				}),
@@ -160,6 +167,12 @@ export default function GoalsPage() {
 		if (percentage >= 20) return '🎉 Хорошее начало!'
 		return '💪 Начни копить!'
 	}
+
+	// Расчёт ежемесячных платежей
+	const monthlyPayment =
+		newGoal.targetAmount && newGoal.years
+			? parseFloat(newGoal.targetAmount) / (newGoal.years * 12)
+			: 0
 
 	if (loading) {
 		return (
@@ -213,6 +226,7 @@ export default function GoalsPage() {
 										required
 									/>
 								</div>
+
 								<div>
 									<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
 										Целевая сумма (BYN)
@@ -227,6 +241,74 @@ export default function GoalsPage() {
 										required
 									/>
 								</div>
+
+								<div>
+									<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
+										За сколько лет хотите накопить?
+									</label>
+									<div className='flex items-center gap-4'>
+										<input
+											type='range'
+											min='1'
+											max='10'
+											value={newGoal.years}
+											onChange={e => setNewGoal({ ...newGoal, years: parseInt(e.target.value) })}
+											className='flex-1'
+										/>
+										<div className='text-2xl font-bold text-blue-600 dark:text-blue-400 w-20 text-center'>
+											{newGoal.years}{' '}
+											{newGoal.years === 1 ? 'год' : newGoal.years < 5 ? 'года' : 'лет'}
+										</div>
+									</div>
+								</div>
+
+								{/* Калькулятор */}
+								{monthlyPayment > 0 && (
+									<div className='bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-6 rounded-lg border-2 border-blue-200 dark:border-blue-800'>
+										<div className='flex items-center gap-2 mb-4'>
+											<Calculator className='h-5 w-5 text-blue-600 dark:text-blue-400' />
+											<h3 className='font-semibold text-lg text-gray-900 dark:text-white'>
+												План накоплений
+											</h3>
+										</div>
+
+										<div className='space-y-3'>
+											<div className='flex justify-between items-center'>
+												<span className='text-gray-700 dark:text-gray-300'>
+													Откладывать в месяц:
+												</span>
+												<span className='text-2xl font-bold text-blue-600 dark:text-blue-400'>
+													{formatCurrency(monthlyPayment)}
+												</span>
+											</div>
+
+											<div className='flex justify-between items-center text-sm'>
+												<span className='text-gray-600 dark:text-gray-400'>В неделю:</span>
+												<span className='font-semibold text-gray-900 dark:text-white'>
+													{formatCurrency(monthlyPayment / 4)}
+												</span>
+											</div>
+
+											<div className='flex justify-between items-center text-sm'>
+												<span className='text-gray-600 dark:text-gray-400'>В день:</span>
+												<span className='font-semibold text-gray-900 dark:text-white'>
+													{formatCurrency(monthlyPayment / 30)}
+												</span>
+											</div>
+
+											<div className='border-t border-blue-200 dark:border-blue-700 pt-3 mt-3'>
+												<div className='flex justify-between items-center'>
+													<span className='text-gray-700 dark:text-gray-300'>Срок:</span>
+													<span className='font-semibold text-gray-900 dark:text-white'>
+														{newGoal.years * 12} месяцев ({newGoal.years}{' '}
+														{newGoal.years === 1 ? 'год' : newGoal.years < 5 ? 'года' : 'лет'})
+													</span>
+												</div>
+											</div>
+										</div>
+									</div>
+								)}
+
 								<div>
 									<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
 										Приоритет
@@ -236,14 +318,15 @@ export default function GoalsPage() {
 										onChange={e => setNewGoal({ ...newGoal, priority: parseInt(e.target.value) })}
 										className='w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
 									>
-										<option value={1}>Высокий</option>
-										<option value={2}>Средний</option>
-										<option value={3}>Низкий</option>
+										<option value={1}>⭐⭐⭐ Высокий</option>
+										<option value={2}>⭐⭐ Средний</option>
+										<option value={3}>⭐ Низкий</option>
 									</select>
 								</div>
+
 								<div className='flex gap-2'>
 									<Button type='submit' className='flex-1'>
-										Создать
+										Создать цель
 									</Button>
 									<Button
 										type='button'
@@ -282,6 +365,19 @@ export default function GoalsPage() {
 							)
 							const remaining = Number(goal.targetAmount) - Number(goal.currentAmount)
 
+							// Рассчитываем сколько осталось месяцев до дедлайна
+							const monthsLeft = goal.deadline
+								? Math.max(
+										0,
+										Math.ceil(
+											(new Date(goal.deadline).getTime() - new Date().getTime()) /
+												(1000 * 60 * 60 * 24 * 30)
+										)
+								  )
+								: null
+
+							const suggestedMonthly = monthsLeft && monthsLeft > 0 ? remaining / monthsLeft : null
+
 							return (
 								<Card key={goal.id} className='dark:bg-gray-800 dark:border-gray-700'>
 									<CardContent className='pt-6'>
@@ -293,6 +389,16 @@ export default function GoalsPage() {
 												<p className='text-sm text-gray-600 dark:text-gray-400'>
 													{getMilestoneMessage(progress)}
 												</p>
+												{goal.deadline && (
+													<p className='text-xs text-gray-500 dark:text-gray-500 mt-1'>
+														📅 Дедлайн:{' '}
+														{new Date(goal.deadline).toLocaleDateString('ru-RU', {
+															year: 'numeric',
+															month: 'long',
+															day: 'numeric',
+														})}
+													</p>
+												)}
 											</div>
 											<div className='text-right'>
 												<div className='text-2xl font-bold text-blue-600 dark:text-blue-400'>
@@ -321,12 +427,178 @@ export default function GoalsPage() {
 
 										{remaining > 0 && (
 											<div className='bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-4'>
-												<div className='text-sm text-gray-600 dark:text-gray-400 mb-1'>
-													Осталось накопить
+												<div className='flex justify-between items-center mb-2'>
+													<div className='text-sm text-gray-600 dark:text-gray-400'>
+														Осталось накопить
+													</div>
+													<div className='text-2xl font-bold text-gray-900 dark:text-white'>
+														{formatCurrency(remaining)}
+													</div>
 												</div>
-												<div className='text-2xl font-bold text-gray-900 dark:text-white'>
-													{formatCurrency(remaining)}
-												</div>
+
+												{monthsLeft && monthsLeft > 0 && (
+													<div className='mt-3 pt-3 border-t border-gray-200 dark:border-gray-600'>
+														<div className='flex items-center gap-2 mb-3'>
+															<Calculator className='h-4 w-4 text-blue-600 dark:text-blue-400' />
+															<span className='text-sm font-medium text-gray-700 dark:text-gray-300'>
+																План накоплений:
+															</span>
+														</div>
+
+														{/* Оригинальный план */}
+														<div className='bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mb-3'>
+															<div className='text-xs text-gray-600 dark:text-gray-400 mb-2'>
+																📅 По первоначальному плану:
+															</div>
+															<div className='grid grid-cols-2 gap-3 text-sm'>
+																<div>
+																	<span className='text-gray-600 dark:text-gray-400'>В месяц:</span>
+																	<div className='font-semibold text-blue-600 dark:text-blue-400'>
+																		{formatCurrency(suggestedMonthly || 0)}
+																	</div>
+																</div>
+																<div>
+																	<span className='text-gray-600 dark:text-gray-400'>
+																		Осталось:
+																	</span>
+																	<div className='font-semibold text-gray-900 dark:text-white'>
+																		{monthsLeft} мес.
+																	</div>
+																</div>
+															</div>
+														</div>
+
+														{/* Расчёт фактического темпа */}
+														{goal.currentAmount > 0 &&
+															(() => {
+																// Вычисляем сколько прошло месяцев с момента создания
+																const createdDate = new Date(goal.createdAt || new Date())
+																const monthsPassed = Math.max(
+																	1,
+																	Math.ceil(
+																		(new Date().getTime() - createdDate.getTime()) /
+																			(1000 * 60 * 60 * 24 * 30)
+																	)
+																)
+
+																// Средняя сумма в месяц по факту
+																const actualMonthlyRate = goal.currentAmount / monthsPassed
+
+																// Прогноз: сколько месяцев осталось при текущем темпе
+																const projectedMonthsLeft =
+																	actualMonthlyRate > 0
+																		? Math.ceil(remaining / actualMonthlyRate)
+																		: null
+
+																// Прогнозируемая дата завершения
+																const projectedEndDate = projectedMonthsLeft
+																	? new Date(
+																			Date.now() + projectedMonthsLeft * 30 * 24 * 60 * 60 * 1000
+																	  )
+																	: null
+
+																// Сравниваем с планом
+																const isAheadOfSchedule =
+																	projectedMonthsLeft && projectedMonthsLeft < monthsLeft
+																const isBehindSchedule =
+																	projectedMonthsLeft && projectedMonthsLeft > monthsLeft
+
+																return (
+																	<div
+																		className={`rounded-lg p-3 ${
+																			isAheadOfSchedule
+																				? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+																				: isBehindSchedule
+																				? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800'
+																				: 'bg-gray-100 dark:bg-gray-800'
+																		}`}
+																	>
+																		<div className='flex items-center gap-2 mb-2'>
+																			{isAheadOfSchedule && <span className='text-lg'>🚀</span>}
+																			{isBehindSchedule && <span className='text-lg'>⚠️</span>}
+																			{!isAheadOfSchedule && !isBehindSchedule && (
+																				<span className='text-lg'>📊</span>
+																			)}
+																			<span className='text-xs font-medium text-gray-700 dark:text-gray-300'>
+																				{isAheadOfSchedule && 'Отлично! Вы опережаете план:'}
+																				{isBehindSchedule && 'Нужно ускориться:'}
+																				{!isAheadOfSchedule &&
+																					!isBehindSchedule &&
+																					'Ваш текущий темп:'}
+																			</span>
+																		</div>
+
+																		<div className='grid grid-cols-2 gap-3 text-sm mb-2'>
+																			<div>
+																				<span className='text-gray-600 dark:text-gray-400'>
+																					Ваш темп:
+																				</span>
+																				<div
+																					className={`font-semibold ${
+																						isAheadOfSchedule
+																							? 'text-green-600 dark:text-green-400'
+																							: isBehindSchedule
+																							? 'text-orange-600 dark:text-orange-400'
+																							: 'text-gray-900 dark:text-white'
+																					}`}
+																				>
+																					{formatCurrency(actualMonthlyRate)}/мес
+																				</div>
+																			</div>
+																			<div>
+																				<span className='text-gray-600 dark:text-gray-400'>
+																					Прогноз:
+																				</span>
+																				<div
+																					className={`font-semibold ${
+																						isAheadOfSchedule
+																							? 'text-green-600 dark:text-green-400'
+																							: isBehindSchedule
+																							? 'text-orange-600 dark:text-orange-400'
+																							: 'text-gray-900 dark:text-white'
+																					}`}
+																				>
+																					{projectedMonthsLeft || '—'} мес.
+																				</div>
+																			</div>
+																		</div>
+
+																		{projectedEndDate && (
+																			<div className='text-xs text-gray-600 dark:text-gray-400 mt-2 pt-2 border-t border-gray-200 dark:border-gray-600'>
+																				{isAheadOfSchedule && (
+																					<span className='text-green-700 dark:text-green-300'>
+																						🎉 При текущем темпе вы достигнете цели{' '}
+																						<span className='font-semibold'>
+																							{projectedEndDate.toLocaleDateString('ru-RU', {
+																								month: 'long',
+																								year: 'numeric',
+																							})}
+																						</span>{' '}
+																						(на {monthsLeft - (projectedMonthsLeft || 0)} мес.
+																						раньше!)
+																					</span>
+																				)}
+																				{isBehindSchedule && (
+																					<span className='text-orange-700 dark:text-orange-300'>
+																						⏰ Чтобы не отстать, увеличьте взносы до{' '}
+																						<span className='font-semibold'>
+																							{formatCurrency((suggestedMonthly || 0) * 1.2)}
+																						</span>
+																						/мес
+																					</span>
+																				)}
+																				{!isAheadOfSchedule && !isBehindSchedule && (
+																					<span className='text-gray-700 dark:text-gray-300'>
+																						✅ Вы идёте точно по графику!
+																					</span>
+																				)}
+																			</div>
+																		)}
+																	</div>
+																)
+															})()}
+													</div>
+												)}
 											</div>
 										)}
 
@@ -334,7 +606,6 @@ export default function GoalsPage() {
 											<>
 												{showAddMoney === goal.id ? (
 													<div className='space-y-3'>
-														{/* Переключатель типа операции */}
 														<div className='flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg'>
 															<button
 																type='button'
