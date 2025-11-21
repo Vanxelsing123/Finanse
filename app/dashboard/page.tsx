@@ -53,10 +53,8 @@ export default function DashboardPage() {
 	const [goals, setGoals] = useState<Goal[]>([])
 	const [loading, setLoading] = useState(true)
 	const [editingCategory, setEditingCategory] = useState<Category | null>(null)
-	const [editingTotalBudget, setEditingTotalBudget] = useState(false)
 	const [newBudgetAmount, setNewBudgetAmount] = useState('')
 	const [newSpentAmount, setNewSpentAmount] = useState('')
-	const [newTotalBudget, setNewTotalBudget] = useState('')
 
 	useEffect(() => {
 		if (status === 'unauthenticated') {
@@ -121,33 +119,6 @@ export default function DashboardPage() {
 		} catch (error) {
 			console.error('Error updating category:', error)
 			alert('Ошибка при обновлении категории')
-		}
-	}
-
-	const handleUpdateTotalBudget = async () => {
-		if (!budget || !newTotalBudget) return
-
-		try {
-			const response = await fetch('/api/budget/total', {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					budgetId: budget.id,
-					totalAmount: parseFloat(newTotalBudget),
-				}),
-			})
-
-			if (response.ok) {
-				setEditingTotalBudget(false)
-				setNewTotalBudget('')
-				fetchData()
-			} else {
-				const data = await response.json()
-				alert(data.error || 'Ошибка при обновлении бюджета')
-			}
-		} catch (error) {
-			console.error('Error updating total budget:', error)
-			alert('Ошибка при обновлении общего бюджета')
 		}
 	}
 
@@ -227,7 +198,7 @@ export default function DashboardPage() {
 
 							<div>
 								<label className='block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 text-gray-700 dark:text-gray-200'>
-									Бюджет (BYN)
+									Бюджет категории (BYN)
 								</label>
 								<input
 									type='number'
@@ -314,89 +285,6 @@ export default function DashboardPage() {
 				</div>
 			)}
 
-			{/* Модальное окно редактирования общего бюджета */}
-			{editingTotalBudget && budget && (
-				<div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4'>
-					<Card className='w-full max-w-md dark:bg-gray-800 dark:border-gray-700'>
-						<CardHeader className='pb-3'>
-							<div className='flex items-center justify-between'>
-								<CardTitle className='text-base sm:text-lg dark:text-white'>
-									Редактировать бюджет
-								</CardTitle>
-								<Button
-									variant='ghost'
-									size='icon'
-									onClick={() => {
-										setEditingTotalBudget(false)
-										setNewTotalBudget('')
-									}}
-									className='dark:hover:bg-gray-700 h-8 w-8'
-								>
-									<X className='h-4 w-4' />
-								</Button>
-							</div>
-						</CardHeader>
-						<CardContent className='space-y-3 sm:space-y-4'>
-							<div className='p-3 sm:p-4 bg-gray-50 dark:bg-gray-700 rounded-lg'>
-								<div className='text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1'>
-									Текущий бюджет
-								</div>
-								<div className='text-xl sm:text-2xl font-bold text-gray-900 dark:text-white'>
-									{formatCurrency(totalBudget)}
-								</div>
-							</div>
-
-							<div>
-								<label className='block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 text-gray-700 dark:text-gray-200'>
-									Новый бюджет (BYN)
-								</label>
-								<input
-									type='number'
-									value={newTotalBudget}
-									onChange={e => setNewTotalBudget(e.target.value)}
-									className='w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
-									placeholder='5000'
-									step='0.01'
-									min='0'
-									autoFocus
-								/>
-							</div>
-
-							<div className='bg-blue-50 dark:bg-blue-900/20 p-2.5 sm:p-3 rounded-lg'>
-								<div className='text-xs sm:text-sm text-gray-700 dark:text-gray-300'>
-									<div className='flex justify-between'>
-										<span>Новый бюджет:</span>
-										<span className='font-semibold'>
-											{formatCurrency(parseFloat(newTotalBudget) || 0)}
-										</span>
-									</div>
-								</div>
-							</div>
-
-							<div className='flex gap-2'>
-								<Button
-									onClick={handleUpdateTotalBudget}
-									className='flex-1 text-sm sm:text-base h-9 sm:h-10'
-									disabled={!newTotalBudget || parseFloat(newTotalBudget) <= 0}
-								>
-									Сохранить
-								</Button>
-								<Button
-									variant='outline'
-									onClick={() => {
-										setEditingTotalBudget(false)
-										setNewTotalBudget('')
-									}}
-									className='flex-1 text-sm sm:text-base h-9 sm:h-10 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
-								>
-									Отмена
-								</Button>
-							</div>
-						</CardContent>
-					</Card>
-				</div>
-			)}
-
 			{/* Header */}
 			<header className='bg-white dark:bg-gray-800 border-b dark:border-gray-700 sticky top-0 z-10'>
 				<div className='container mx-auto px-3 sm:px-4 py-3 sm:py-4'>
@@ -472,10 +360,11 @@ export default function DashboardPage() {
 						<div className='grid grid-cols-1 xs:grid-cols-3 gap-3 sm:gap-4'>
 							<Card
 								className='dark:bg-gray-800 dark:border-gray-700 cursor-pointer hover:shadow-lg transition-shadow'
-								onClick={() => {
-									setEditingTotalBudget(true)
-									setNewTotalBudget(totalBudget.toString())
-								}}
+								onClick={() =>
+									router.push(
+										`/budget/edit?month=${selectedMonth.month}&year=${selectedMonth.year}`
+									)
+								}
 							>
 								<CardHeader className='pb-1.5 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6'>
 									<CardDescription className='flex items-center justify-between dark:text-gray-400 text-xs sm:text-sm'>
@@ -532,7 +421,8 @@ export default function DashboardPage() {
 									</Link>
 								</div>
 								<CardDescription className='dark:text-gray-400 text-xs sm:text-sm'>
-									Нажмите на категорию для изменения
+									Клик по категории - быстрое редактирование. Клик по "Бюджет" - полное
+									редактирование
 								</CardDescription>
 							</CardHeader>
 							<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6'>
