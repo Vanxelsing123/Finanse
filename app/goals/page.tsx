@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { calculateProgress, formatCurrency, getProgressColor } from '@/lib/utils'
-import { ArrowLeft, Calculator, Minus, Plus, Target } from 'lucide-react'
+import { ArrowLeft, Calculator, Minus, Plus, Target, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
@@ -52,7 +52,6 @@ export default function GoalsPage() {
 	const createGoal = async (e: React.FormEvent) => {
 		e.preventDefault()
 		try {
-			// Рассчитываем дедлайн
 			const deadline = new Date()
 			deadline.setFullYear(deadline.getFullYear() + newGoal.years)
 
@@ -149,6 +148,28 @@ export default function GoalsPage() {
 		}
 	}
 
+	const deleteGoal = async (goalId: string, goalName: string) => {
+		if (!confirm(`Вы уверены, что хотите удалить цель "${goalName}"? Это действие необратимо.`)) {
+			return
+		}
+
+		try {
+			const response = await fetch(`/api/goals/${goalId}`, {
+				method: 'DELETE',
+			})
+
+			if (response.ok) {
+				fetchGoals()
+			} else {
+				const data = await response.json()
+				alert(data.error || 'Ошибка при удалении цели')
+			}
+		} catch (error) {
+			console.error('Error deleting goal:', error)
+			alert('Ошибка при удалении цели')
+		}
+	}
+
 	const handleCustomAmount = (goalId: string) => {
 		const amount = parseFloat(customAmount)
 		if (amount > 0) {
@@ -168,7 +189,6 @@ export default function GoalsPage() {
 		return '💪 Начни копить!'
 	}
 
-	// Расчёт ежемесячных платежей
 	const monthlyPayment =
 		newGoal.targetAmount && newGoal.years
 			? parseFloat(newGoal.targetAmount) / (newGoal.years * 12)
@@ -262,7 +282,6 @@ export default function GoalsPage() {
 									</div>
 								</div>
 
-								{/* Калькулятор */}
 								{monthlyPayment > 0 && (
 									<div className='bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-6 rounded-lg border-2 border-blue-200 dark:border-blue-800'>
 										<div className='flex items-center gap-2 mb-4'>
@@ -365,7 +384,6 @@ export default function GoalsPage() {
 							)
 							const remaining = Number(goal.targetAmount) - Number(goal.currentAmount)
 
-							// Рассчитываем сколько осталось месяцев до дедлайна
 							const monthsLeft = goal.deadline
 								? Math.max(
 										0,
@@ -382,10 +400,21 @@ export default function GoalsPage() {
 								<Card key={goal.id} className='dark:bg-gray-800 dark:border-gray-700'>
 									<CardContent className='pt-6'>
 										<div className='flex items-start justify-between mb-4'>
-											<div>
-												<h3 className='text-xl font-bold mb-1 text-gray-900 dark:text-white'>
-													{goal.name}
-												</h3>
+											<div className='flex-1'>
+												<div className='flex items-center gap-2'>
+													<h3 className='text-xl font-bold text-gray-900 dark:text-white'>
+														{goal.name}
+													</h3>
+													<Button
+														variant='ghost'
+														size='icon'
+														onClick={() => deleteGoal(goal.id, goal.name)}
+														className='h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20'
+														title='Удалить цель'
+													>
+														<Trash2 className='h-4 w-4' />
+													</Button>
+												</div>
 												<p className='text-sm text-gray-600 dark:text-gray-400'>
 													{getMilestoneMessage(progress)}
 												</p>
@@ -445,7 +474,6 @@ export default function GoalsPage() {
 															</span>
 														</div>
 
-														{/* Оригинальный план */}
 														<div className='bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mb-3'>
 															<div className='text-xs text-gray-600 dark:text-gray-400 mb-2'>
 																📅 По первоначальному плану:
@@ -468,10 +496,8 @@ export default function GoalsPage() {
 															</div>
 														</div>
 
-														{/* Расчёт фактического темпа */}
 														{goal.currentAmount > 0 &&
 															(() => {
-																// Вычисляем сколько прошло месяцев с момента создания
 																const createdDate = new Date(goal.createdAt || new Date())
 																const monthsPassed = Math.max(
 																	1,
@@ -481,23 +507,19 @@ export default function GoalsPage() {
 																	)
 																)
 
-																// Средняя сумма в месяц по факту
 																const actualMonthlyRate = goal.currentAmount / monthsPassed
 
-																// Прогноз: сколько месяцев осталось при текущем темпе
 																const projectedMonthsLeft =
 																	actualMonthlyRate > 0
 																		? Math.ceil(remaining / actualMonthlyRate)
 																		: null
 
-																// Прогнозируемая дата завершения
 																const projectedEndDate = projectedMonthsLeft
 																	? new Date(
 																			Date.now() + projectedMonthsLeft * 30 * 24 * 60 * 60 * 1000
 																	  )
 																	: null
 
-																// Сравниваем с планом
 																const isAheadOfSchedule =
 																	projectedMonthsLeft && projectedMonthsLeft < monthsLeft
 																const isBehindSchedule =
@@ -745,7 +767,6 @@ export default function GoalsPage() {
 				)}
 			</main>
 
-			{/* Нижняя навигация */}
 			<nav className='fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t dark:border-gray-700 md:hidden'>
 				<div className='flex justify-around py-2'>
 					<Link
