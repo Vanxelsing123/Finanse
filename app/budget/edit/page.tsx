@@ -6,7 +6,7 @@ import { formatCurrency, getCurrentMonthYear, getMonthName } from '@/lib/utils'
 import { ArrowLeft, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 
 interface Category {
 	id: string
@@ -72,7 +72,7 @@ const COLOR_LIST = [
 	'#f97316',
 ]
 
-export default function BudgetEditPage() {
+function BudgetEditContent() {
 	const router = useRouter()
 	const searchParams = useSearchParams()
 	const monthParam = searchParams.get('month')
@@ -290,7 +290,6 @@ export default function BudgetEditPage() {
 		setSaving(true)
 
 		try {
-			// Обновляем общую сумму бюджета
 			const budgetResponse = await fetch('/api/budget/total', {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
@@ -304,7 +303,6 @@ export default function BudgetEditPage() {
 				throw new Error('Failed to update total budget')
 			}
 
-			// Обновляем все категории
 			for (const category of categories) {
 				await fetch('/api/budget/category', {
 					method: 'PATCH',
@@ -740,5 +738,19 @@ export default function BudgetEditPage() {
 				</div>
 			</main>
 		</div>
+	)
+}
+
+export default function BudgetEditPage() {
+	return (
+		<Suspense
+			fallback={
+				<div className='min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900'>
+					<div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600'></div>
+				</div>
+			}
+		>
+			<BudgetEditContent />
+		</Suspense>
 	)
 }
