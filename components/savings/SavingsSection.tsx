@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { motion } from 'framer-motion'
+import { motion, Variants } from 'framer-motion'
 import { Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AddSavingsModal } from './AddSavingsModal'
@@ -10,13 +10,13 @@ import { ManageSavingsModal } from './ManageSavingsModal'
 import { SavingsCard } from './SavingsCard'
 import { Savings } from './types'
 
-const itemVariants = {
+const itemVariants: Variants = {
 	hidden: { y: 20, opacity: 0 },
 	visible: {
 		y: 0,
 		opacity: 1,
 		transition: {
-			type: 'spring',
+			type: 'spring' as const,
 			stiffness: 100,
 			damping: 12,
 		},
