@@ -27,6 +27,7 @@ model User {
   transactions Transaction[]
   goals        Goal[]
   insights     Insight[]
+  savings      Savings[] // ← ДОБАВЛЕНО
 }
 
 model Budget {
@@ -159,4 +160,36 @@ enum InsightType {
   ACHIEVEMENT
   FORECAST
   SUGGESTION
+}
+
+// ============================================
+// НОВЫЕ МОДЕЛИ ДЛЯ НАКОПЛЕНИЙ
+// ============================================
+
+model Savings {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String   @default("Мои накопления")
+  currency  String   @default("BYN")
+  amount    Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions SavingsTransaction[]
+
+  @@unique([userId, currency])
+  @@index([userId])
+}
+
+model SavingsTransaction {
+  id          String   @id @default(cuid())
+  savingsId   String
+  savings     Savings  @relation(fields: [savingsId], references: [id], onDelete: Cascade)
+  amount      Decimal  @db.Decimal(10, 2)
+  type        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@index([savingsId])
 }

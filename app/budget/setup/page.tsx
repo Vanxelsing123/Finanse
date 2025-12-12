@@ -3,7 +3,8 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency, getCurrentMonthYear, getMonthName } from '@/lib/utils'
-import { ArrowLeft, Plus, Sparkles, Trash2, X } from 'lucide-react' // ✅ Добавили X
+import { AnimatePresence, motion } from 'framer-motion'
+import { ArrowLeft, ArrowRight, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -24,189 +25,152 @@ const DEFAULT_CATEGORIES = [
 	{ name: 'Здоровье', icon: '💊', color: '#ef4444', percentage: 10 },
 	{ name: 'Одежда', icon: '👔', color: '#f59e0b', percentage: 10 },
 	{ name: 'Образование', icon: '📚', color: '#06b6d4', percentage: 10 },
-	{ name: 'Кафе/Рестораны', icon: '🍔', color: '#ec4899', percentage: 10 },
-	{ name: 'Другое', icon: '📦', color: '#6b7280', percentage: 5 },
+	{ name: 'Рестораны', icon: '🍔', color: '#ec4899', percentage: 10 },
+	{ name: 'Прочее', icon: '📦', color: '#6b7280', percentage: 5 },
 ]
 
-const EMOJI_LIST = [
-	'🛒',
-	'🚗',
-	'🎮',
-	'💊',
-	'👔',
-	'📚',
-	'🍔',
-	'📦',
-	'🏠',
-	'💡',
-	'📱',
-	'💻',
-	'✈️',
-	'🎬',
-	'🎵',
-	'⚽',
-	'🎨',
-	'🔧',
-	'💰',
-	'🎁',
-	'🍕',
-	'☕',
-	'🏋️',
-	'🐕',
-	'🌳',
-	'💳',
-	'📊',
-	'🎯',
-	'🔑',
-	'🏥',
-]
+const containerVariants = {
+	hidden: { opacity: 0 },
+	visible: {
+		opacity: 1,
+		transition: {
+			staggerChildren: 0.1,
+		},
+	},
+}
 
-const COLOR_LIST = [
-	'#10b981',
-	'#3b82f6',
-	'#8b5cf6',
-	'#ef4444',
-	'#f59e0b',
-	'#06b6d4',
-	'#ec4899',
-	'#6b7280',
-	'#14b8a6',
-	'#f97316',
-]
+const itemVariants = {
+	hidden: { y: 20, opacity: 0 },
+	visible: {
+		y: 0,
+		opacity: 1,
+		transition: {
+			type: 'spring',
+			stiffness: 100,
+		},
+	},
+}
+
+const overlayVariants = {
+	hidden: { opacity: 0 },
+	visible: { opacity: 1 },
+	exit: { opacity: 0 },
+}
+
+const modalVariants = {
+	hidden: { opacity: 0, scale: 0.8, y: 50 },
+	visible: {
+		opacity: 1,
+		scale: 1,
+		y: 0,
+		transition: {
+			type: 'spring',
+			stiffness: 300,
+			damping: 25,
+		},
+	},
+	exit: {
+		opacity: 0,
+		scale: 0.8,
+		y: 50,
+	},
+}
 
 export default function BudgetSetupPage() {
 	const router = useRouter()
-	const { month, year } = getCurrentMonthYear()
-	const [totalAmount, setTotalAmount] = useState('')
-	const [categories, setCategories] = useState<Category[]>(
-		DEFAULT_CATEGORIES.map((cat, index) => ({
-			...cat,
-			id: `cat-${index}`,
-			budgetAmount: 0,
-		}))
-	)
+	const [step, setStep] = useState(1)
+	const [totalBudget, setTotalBudget] = useState('')
+	const [categories, setCategories] = useState<Category[]>([])
 	const [showAddCategory, setShowAddCategory] = useState(false)
 	const [newCategory, setNewCategory] = useState({
 		name: '',
 		icon: '📦',
 		color: '#6b7280',
-		percentage: 5,
+		amount: 0,
 	})
-	const [loading, setLoading] = useState(false)
+	const [saving, setSaving] = useState(false)
 
-	// ✅ Исправлено: предотвращаем появление 0
-	const handleTotalAmountChange = (value: string) => {
-		setTotalAmount(value)
+	const { month, year } = getCurrentMonthYear()
 
-		if (!value || value === '' || parseFloat(value) <= 0) {
-			// Если поле пустое, сбрасываем суммы категорий
-			setCategories(prev =>
-				prev.map(cat => ({
-					...cat,
-					budgetAmount: 0,
-				}))
-			)
+	const handleUseDefaults = () => {
+		const budget = parseFloat(totalBudget)
+		const defaultCats = DEFAULT_CATEGORIES.map((cat, index) => ({
+			id: `temp-${index}`,
+			...cat,
+			budgetAmount: Math.round(((budget * cat.percentage) / 100) * 100) / 100,
+		}))
+		setCategories(defaultCats)
+		setStep(2)
+	}
+
+	const handleCustomSetup = () => {
+		setCategories([])
+		setStep(2)
+	}
+
+	const handleAddCategory = () => {
+		if (!newCategory.name || !newCategory.icon || !newCategory.color || newCategory.amount <= 0) {
+			alert('Заполните все поля')
 			return
 		}
 
-		const amount = parseFloat(value)
+		const budget = parseFloat(totalBudget)
+		const percentage = (newCategory.amount / budget) * 100
 
-		setCategories(prev =>
-			prev.map(cat => ({
-				...cat,
-				budgetAmount: Math.round(((amount * cat.percentage) / 100) * 100) / 100,
-			}))
-		)
+		const newCat: Category = {
+			id: `temp-${Date.now()}`,
+			name: newCategory.name,
+			icon: newCategory.icon,
+			color: newCategory.color,
+			budgetAmount: newCategory.amount,
+			percentage: Math.round(percentage * 10) / 10,
+		}
+
+		setCategories([...categories, newCat])
+		setShowAddCategory(false)
+		setNewCategory({ name: '', icon: '📦', color: '#6b7280', amount: 0 })
 	}
 
-	const handleCategoryAmountChange = (id: string, value: string) => {
-		const amount = parseFloat(value) || 0
-		const totalBudget = parseFloat(totalAmount) || 0
-
-		setCategories(prev =>
-			prev.map(cat =>
-				cat.id === id
-					? {
-							...cat,
-							budgetAmount: amount,
-							percentage: totalBudget > 0 ? Math.round((amount / totalBudget) * 100) : 0,
-					  }
-					: cat
-			)
-		)
+	const handleRemoveCategory = (id: string) => {
+		setCategories(categories.filter(cat => cat.id !== id))
 	}
 
-	const handleCategoryPercentageChange = (id: string, value: string) => {
-		const percentage = parseFloat(value) || 0
-		const totalBudget = parseFloat(totalAmount) || 0
-
-		setCategories(prev =>
-			prev.map(cat =>
+	const handlePercentageChange = (id: string, percentage: number) => {
+		const budget = parseFloat(totalBudget)
+		setCategories(
+			categories.map(cat =>
 				cat.id === id
 					? {
 							...cat,
 							percentage,
-							budgetAmount: Math.round(((totalBudget * percentage) / 100) * 100) / 100,
+							budgetAmount: Math.round(((budget * percentage) / 100) * 100) / 100,
 					  }
 					: cat
 			)
 		)
 	}
 
-	const handleDeleteCategory = (id: string) => {
-		setCategories(prev => prev.filter(cat => cat.id !== id))
-	}
-
-	const handleAddCategory = () => {
-		if (!newCategory.name.trim()) {
-			alert('Введите название категории')
-			return
-		}
-
-		const totalBudget = parseFloat(totalAmount) || 0
-		const newCat: Category = {
-			id: `cat-${Date.now()}`,
-			name: newCategory.name,
-			icon: newCategory.icon,
-			color: newCategory.color,
-			percentage: newCategory.percentage,
-			budgetAmount: Math.round(((totalBudget * newCategory.percentage) / 100) * 100) / 100,
-		}
-
-		setCategories(prev => [...prev, newCat])
-		setShowAddCategory(false)
-		setNewCategory({
-			name: '',
-			icon: '📦',
-			color: '#6b7280',
-			percentage: 5,
-		})
-	}
-
 	const handleAutoDistribute = () => {
 		const count = categories.length
+		if (count === 0) return
+
 		const equalPercentage = Math.floor(100 / count)
 		const remainder = 100 - equalPercentage * count
-		const totalBudget = parseFloat(totalAmount) || 0
+		const budget = parseFloat(totalBudget)
 
-		setCategories(prev =>
-			prev.map((cat, index) => {
+		setCategories(
+			categories.map((cat, index) => {
 				const percentage = index === 0 ? equalPercentage + remainder : equalPercentage
 				return {
 					...cat,
 					percentage,
-					budgetAmount: Math.round(((totalBudget * percentage) / 100) * 100) / 100,
+					budgetAmount: Math.round(((budget * percentage) / 100) * 100) / 100,
 				}
 			})
 		)
 	}
 
-	const handleCreateBudget = async () => {
-		if (!totalAmount || parseFloat(totalAmount) <= 0) {
-			alert('Введите общую сумму бюджета')
-			return
-		}
-
+	const handleSaveBudget = async () => {
 		if (categories.length === 0) {
 			alert('Добавьте хотя бы одну категорию')
 			return
@@ -214,11 +178,11 @@ export default function BudgetSetupPage() {
 
 		const totalPercentage = categories.reduce((sum, cat) => sum + cat.percentage, 0)
 		if (Math.abs(totalPercentage - 100) > 1) {
-			alert(`Сумма процентов должна быть 100% (сейчас ${totalPercentage}%)`)
+			alert(`Сумма процентов должна быть 100% (сейчас ${totalPercentage.toFixed(1)}%)`)
 			return
 		}
 
-		setLoading(true)
+		setSaving(true)
 
 		try {
 			const response = await fetch('/api/budget', {
@@ -227,7 +191,7 @@ export default function BudgetSetupPage() {
 				body: JSON.stringify({
 					month,
 					year,
-					totalAmount: parseFloat(totalAmount),
+					totalAmount: parseFloat(totalBudget),
 					categories: categories.map(cat => ({
 						name: cat.name,
 						icon: cat.icon,
@@ -244,10 +208,10 @@ export default function BudgetSetupPage() {
 				alert(data.error || 'Ошибка при создании бюджета')
 			}
 		} catch (error) {
-			console.error('Error creating budget:', error)
-			alert('Ошибка при создании бюджета')
+			console.error('Error saving budget:', error)
+			alert('Ошибка при сохранении бюджета')
 		} finally {
-			setLoading(false)
+			setSaving(false)
 		}
 	}
 
@@ -256,18 +220,25 @@ export default function BudgetSetupPage() {
 
 	return (
 		<div className='min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800 pb-20'>
-			<header className='bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10'>
+			<motion.header
+				initial={{ y: -100 }}
+				animate={{ y: 0 }}
+				transition={{ type: 'spring', stiffness: 100 }}
+				className='bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10'
+			>
 				<div className='container mx-auto px-3 sm:px-4 py-3 sm:py-4'>
 					<div className='flex items-center justify-between'>
 						<Link href='/dashboard'>
-							<Button
-								variant='ghost'
-								size='sm'
-								className='dark:text-gray-200 dark:hover:bg-gray-700'
-							>
-								<ArrowLeft className='h-4 w-4 mr-2' />
-								Назад
-							</Button>
+							<motion.div whileHover={{ x: -5 }} whileTap={{ scale: 0.95 }}>
+								<Button
+									variant='ghost'
+									size='sm'
+									className='dark:text-gray-200 dark:hover:bg-gray-700'
+								>
+									<ArrowLeft className='h-4 w-4 mr-2' />
+									Назад
+								</Button>
+							</motion.div>
 						</Link>
 						<h1 className='text-lg sm:text-xl font-bold text-gray-900 dark:text-white'>
 							Настройка бюджета
@@ -275,369 +246,741 @@ export default function BudgetSetupPage() {
 						<div className='w-16 sm:w-20'></div>
 					</div>
 				</div>
-			</header>
+			</motion.header>
 
-			<main className='container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-4xl space-y-4 sm:space-y-6'>
-				<Card className='dark:bg-gray-800 dark:border-gray-700'>
-					<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
-						<CardTitle className='text-lg sm:text-xl dark:text-white'>
-							Бюджет на {getMonthName(month)} {year}
-						</CardTitle>
-						<CardDescription className='text-xs sm:text-sm dark:text-gray-400'>
-							Введите общую сумму и настройте распределение по категориям
-						</CardDescription>
-					</CardHeader>
-				</Card>
-
-				<Card className='dark:bg-gray-800 dark:border-gray-700'>
-					<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
-						<CardTitle className='text-base sm:text-lg dark:text-white'>
-							Общая сумма бюджета
-						</CardTitle>
-					</CardHeader>
-					<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6'>
-						<div className='space-y-3 sm:space-y-4'>
-							<div>
-								<label className='block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 text-gray-700 dark:text-gray-200'>
-									Сумма (BYN)
-								</label>
-								<input
-									type='number'
-									value={totalAmount}
-									onChange={e => handleTotalAmountChange(e.target.value)}
-									className='w-full px-3 sm:px-4 py-2 sm:py-3 text-base sm:text-lg border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
-									placeholder='5000'
-									step='0.01'
-									min='0'
+			<motion.main
+				variants={containerVariants}
+				initial='hidden'
+				animate='visible'
+				className='container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-4xl space-y-4 sm:space-y-6'
+			>
+				{/* Progress Steps */}
+				<motion.div
+					variants={itemVariants}
+					className='flex items-center justify-center gap-2 sm:gap-4'
+				>
+					{[1, 2, 3].map(s => (
+						<motion.div
+							key={s}
+							className='flex items-center'
+							initial={{ opacity: 0, scale: 0.5 }}
+							animate={{ opacity: 1, scale: 1 }}
+							transition={{ delay: s * 0.1 }}
+						>
+							<motion.div
+								animate={{
+									scale: step === s ? 1.2 : 1,
+									backgroundColor: step >= s ? '#3b82f6' : '#d1d5db',
+								}}
+								className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold text-white text-sm sm:text-base`}
+							>
+								{s}
+							</motion.div>
+							{s < 3 && (
+								<motion.div
+									animate={{
+										width: step > s ? '100%' : '0%',
+										backgroundColor: '#3b82f6',
+									}}
+									transition={{ duration: 0.3 }}
+									className='h-1 mx-2 sm:mx-4 bg-gray-300 dark:bg-gray-600'
+									style={{ width: '40px' }}
 								/>
-							</div>
-
-							{totalAmount && parseFloat(totalAmount) > 0 && (
-								<div className='bg-blue-50 dark:bg-blue-900/20 p-3 sm:p-4 rounded-lg'>
-									<div className='flex justify-between items-center mb-2'>
-										<span className='text-xs sm:text-sm text-gray-600 dark:text-gray-400'>
-											Всего бюджет:
-										</span>
-										<span className='text-lg sm:text-xl font-bold text-blue-600 dark:text-blue-400'>
-											{formatCurrency(parseFloat(totalAmount))}
-										</span>
-									</div>
-									<div className='flex justify-between items-center mb-2'>
-										<span className='text-xs sm:text-sm text-gray-600 dark:text-gray-400'>
-											Распределено:
-										</span>
-										<span className='text-base sm:text-lg font-semibold text-gray-900 dark:text-white'>
-											{formatCurrency(totalAllocated)}
-										</span>
-									</div>
-									<div className='flex justify-between items-center pt-2 border-t border-blue-200 dark:border-blue-700'>
-										<span className='text-xs sm:text-sm text-gray-600 dark:text-gray-400'>
-											Осталось:
-										</span>
-										<span
-											className={`text-base sm:text-lg font-bold ${
-												parseFloat(totalAmount) - totalAllocated >= 0
-													? 'text-green-600 dark:text-green-400'
-													: 'text-red-600 dark:text-red-400'
-											}`}
-										>
-											{formatCurrency(parseFloat(totalAmount) - totalAllocated)}
-										</span>
-									</div>
-									<div className='mt-2 pt-2 border-t border-blue-200 dark:border-blue-700'>
-										<div className='flex justify-between items-center'>
-											<span className='text-xs sm:text-sm text-gray-600 dark:text-gray-400'>
-												Сумма процентов:
-											</span>
-											<span
-												className={`text-sm sm:text-base font-semibold ${
-													Math.abs(totalPercentage - 100) < 1
-														? 'text-green-600 dark:text-green-400'
-														: 'text-orange-600 dark:text-orange-400'
-												}`}
-											>
-												{totalPercentage.toFixed(1)}%
-											</span>
-										</div>
-									</div>
-								</div>
 							)}
-						</div>
-					</CardContent>
-				</Card>
+						</motion.div>
+					))}
+				</motion.div>
 
-				<Card className='dark:bg-gray-800 dark:border-gray-700'>
-					<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
-						<div className='flex flex-col xs:flex-row justify-between items-start xs:items-center gap-2 sm:gap-0'>
-							<div>
-								<CardTitle className='text-base sm:text-lg dark:text-white'>
-									Категории расходов
-								</CardTitle>
-								<CardDescription className='text-xs sm:text-sm dark:text-gray-400'>
-									{categories.length} категорий
-								</CardDescription>
-							</div>
-							<div className='flex gap-2 w-full xs:w-auto'>
-								<Button
-									variant='outline'
-									size='sm'
-									onClick={handleAutoDistribute}
-									className='flex-1 xs:flex-none text-xs sm:text-sm h-8 sm:h-9 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
-								>
-									<Sparkles className='h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2' />
-									Авто
-								</Button>
-								<Button
-									size='sm'
-									onClick={() => setShowAddCategory(true)}
-									className='flex-1 xs:flex-none text-xs sm:text-sm h-8 sm:h-9'
-								>
-									<Plus className='h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2' />
-									Добавить
-								</Button>
-							</div>
-						</div>
-					</CardHeader>
-					<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6'>
-						<div className='space-y-3 sm:space-y-4'>
-							{categories.map(category => (
-								<div
-									key={category.id}
-									className='border border-gray-200 dark:border-gray-700 rounded-lg p-3 sm:p-4 space-y-2 sm:space-y-3'
-								>
-									<div className='flex items-center gap-2 sm:gap-3'>
-										<div
-											className='w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-xl sm:text-2xl flex-shrink-0'
-											style={{ backgroundColor: `${category.color}20` }}
+				<AnimatePresence mode='wait'>
+					{/* Шаг 1: Общий бюджет */}
+					{step === 1 && (
+						<motion.div
+							key='step1'
+							initial={{ opacity: 0, x: 100 }}
+							animate={{ opacity: 1, x: 0 }}
+							exit={{ opacity: 0, x: -100 }}
+							transition={{ type: 'spring', stiffness: 100 }}
+						>
+							<Card className='dark:bg-gray-800 dark:border-gray-700'>
+								<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
+									<CardTitle className='text-lg sm:text-xl dark:text-white'>
+										Шаг 1: Общий бюджет
+									</CardTitle>
+									<CardDescription className='text-xs sm:text-sm dark:text-gray-400'>
+										Бюджет на {getMonthName(month)} {year}
+									</CardDescription>
+								</CardHeader>
+								<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6 space-y-4 sm:space-y-6'>
+									<motion.div
+										initial={{ opacity: 0, y: 20 }}
+										animate={{ opacity: 1, y: 0 }}
+										transition={{ delay: 0.2 }}
+									>
+										<label className='block text-sm sm:text-base font-medium mb-2 sm:mb-3 text-gray-700 dark:text-gray-200'>
+											Сколько вы планируете потратить в этом месяце? (BYN)
+										</label>
+										<input
+											type='number'
+											value={totalBudget}
+											onChange={e => setTotalBudget(e.target.value)}
+											className='w-full px-4 sm:px-6 py-3 sm:py-4 text-xl sm:text-2xl font-semibold border-2 border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all'
+											placeholder='5000'
+											step='0.01'
+											min='0'
+											autoFocus
+										/>
+									</motion.div>
+
+									{totalBudget && parseFloat(totalBudget) > 0 && (
+										<motion.div
+											initial={{ opacity: 0, scale: 0.9 }}
+											animate={{ opacity: 1, scale: 1 }}
+											className='bg-blue-50 dark:bg-blue-900/20 p-4 sm:p-6 rounded-xl'
 										>
-											{category.icon}
-										</div>
-										<div className='flex-1 min-w-0'>
-											<input
-												type='text'
-												value={category.name}
-												onChange={e =>
-													setCategories(prev =>
-														prev.map(cat =>
-															cat.id === category.id ? { ...cat, name: e.target.value } : cat
-														)
-													)
-												}
-												className='w-full px-2 sm:px-3 py-1 sm:py-1.5 text-sm sm:text-base font-medium border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
-											/>
-										</div>
+											<p className='text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-2'>
+												Ваш месячный бюджет:
+											</p>
+											<p className='text-2xl sm:text-3xl font-bold text-blue-600 dark:text-blue-400'>
+												{formatCurrency(parseFloat(totalBudget))}
+											</p>
+										</motion.div>
+									)}
+
+									<motion.div
+										initial={{ opacity: 0, y: 20 }}
+										animate={{ opacity: 1, y: 0 }}
+										transition={{ delay: 0.4 }}
+										className='space-y-3 sm:space-y-4'
+									>
+										<p className='text-sm sm:text-base font-medium text-gray-700 dark:text-gray-200'>
+											Выберите способ настройки категорий:
+										</p>
+
+										<motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+											<Button
+												onClick={handleUseDefaults}
+												disabled={!totalBudget || parseFloat(totalBudget) <= 0}
+												className='w-full h-auto py-4 sm:py-6 flex flex-col items-start gap-2 text-left'
+											>
+												<div className='flex items-center gap-2 sm:gap-3'>
+													<Sparkles className='h-5 w-5 sm:h-6 sm:w-6' />
+													<span className='text-base sm:text-lg font-semibold'>
+														Использовать готовый шаблон
+													</span>
+												</div>
+												<span className='text-xs sm:text-sm opacity-90'>
+													8 популярных категорий с рекомендуемым распределением
+												</span>
+											</Button>
+										</motion.div>
+
+										<motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+											<Button
+												onClick={handleCustomSetup}
+												disabled={!totalBudget || parseFloat(totalBudget) <= 0}
+												variant='outline'
+												className='w-full h-auto py-4 sm:py-6 flex flex-col items-start gap-2 text-left dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+											>
+												<div className='flex items-center gap-2 sm:gap-3'>
+													<Plus className='h-5 w-5 sm:h-6 sm:w-6' />
+													<span className='text-base sm:text-lg font-semibold'>
+														Настроить вручную
+													</span>
+												</div>
+												<span className='text-xs sm:text-sm opacity-70'>
+													Создайте свои категории и распределите бюджет
+												</span>
+											</Button>
+										</motion.div>
+									</motion.div>
+								</CardContent>
+							</Card>
+						</motion.div>
+					)}
+
+					{/* Шаг 2: Категории */}
+					{step === 2 && (
+						<motion.div
+							key='step2'
+							initial={{ opacity: 0, x: 100 }}
+							animate={{ opacity: 1, x: 0 }}
+							exit={{ opacity: 0, x: -100 }}
+							transition={{ type: 'spring', stiffness: 100 }}
+							className='space-y-4 sm:space-y-6'
+						>
+							<Card className='dark:bg-gray-800 dark:border-gray-700'>
+								<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
+									<CardTitle className='text-lg sm:text-xl dark:text-white'>
+										Шаг 2: Категории расходов
+									</CardTitle>
+									<CardDescription className='text-xs sm:text-sm dark:text-gray-400'>
+										{categories.length > 0
+											? `${categories.length} категорий добавлено`
+											: 'Добавьте категории расходов'}
+									</CardDescription>
+								</CardHeader>
+								<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6 space-y-4'>
+									{categories.length > 0 && (
+										<>
+											<div className='flex gap-2'>
+												<motion.div
+													whileHover={{ scale: 1.05 }}
+													whileTap={{ scale: 0.95 }}
+													className='flex-1'
+												>
+													<Button
+														variant='outline'
+														onClick={handleAutoDistribute}
+														className='w-full text-xs sm:text-sm dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+													>
+														<Sparkles className='h-4 w-4 mr-2' />
+														Распределить равномерно
+													</Button>
+												</motion.div>
+												<motion.div
+													whileHover={{ scale: 1.05 }}
+													whileTap={{ scale: 0.95 }}
+													className='flex-1'
+												>
+													<Button
+														onClick={() => setShowAddCategory(true)}
+														className='w-full text-xs sm:text-sm'
+													>
+														<Plus className='h-4 w-4 mr-2' />
+														Добавить категорию
+													</Button>
+												</motion.div>
+											</div>
+
+											<motion.div
+												initial={{ opacity: 0, scale: 0.9 }}
+												animate={{ opacity: 1, scale: 1 }}
+												className='bg-blue-50 dark:bg-blue-900/20 p-3 sm:p-4 rounded-lg'
+											>
+												<div className='flex justify-between items-center mb-2'>
+													<span className='text-xs sm:text-sm text-gray-600 dark:text-gray-400'>
+														Всего бюджет:
+													</span>
+													<span className='text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400'>
+														{formatCurrency(parseFloat(totalBudget))}
+													</span>
+												</div>
+												<div className='flex justify-between items-center mb-2'>
+													<span className='text-xs sm:text-sm text-gray-600 dark:text-gray-400'>
+														Распределено:
+													</span>
+													<span className='text-sm sm:text-base font-semibold text-gray-900 dark:text-white'>
+														{formatCurrency(totalAllocated)}
+													</span>
+												</div>
+												<div className='flex justify-between items-center pt-2 border-t border-blue-200 dark:border-blue-700'>
+													<span className='text-xs sm:text-sm text-gray-600 dark:text-gray-400'>
+														Осталось:
+													</span>
+													<span
+														className={`text-sm sm:text-base font-bold ${
+															parseFloat(totalBudget) - totalAllocated >= 0
+																? 'text-green-600 dark:text-green-400'
+																: 'text-red-600 dark:text-red-400'
+														}`}
+													>
+														{formatCurrency(parseFloat(totalBudget) - totalAllocated)}
+													</span>
+												</div>
+												<div className='pt-2 border-t border-blue-200 dark:border-blue-700 mt-2'>
+													<div className='flex justify-between items-center'>
+														<span className='text-xs sm:text-sm text-gray-600 dark:text-gray-400'>
+															Сумма процентов:
+														</span>
+														<span
+															className={`text-xs sm:text-sm font-semibold ${
+																Math.abs(totalPercentage - 100) < 1
+																	? 'text-green-600 dark:text-green-400'
+																	: 'text-orange-600 dark:text-orange-400'
+															}`}
+														>
+															{totalPercentage.toFixed(1)}%
+														</span>
+													</div>
+												</div>
+											</motion.div>
+										</>
+									)}
+
+									<div className='space-y-3'>
+										<AnimatePresence>
+											{categories.map((category, index) => (
+												<motion.div
+													key={category.id}
+													initial={{ opacity: 0, x: -50 }}
+													animate={{ opacity: 1, x: 0 }}
+													exit={{ opacity: 0, x: 50 }}
+													transition={{ delay: index * 0.05 }}
+													whileHover={{ scale: 1.02 }}
+													className='border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 sm:p-4 space-y-3'
+												>
+													<div className='flex items-center gap-3'>
+														<motion.div
+															whileHover={{ rotate: 360 }}
+															transition={{ duration: 0.5 }}
+															className='w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0'
+															style={{ backgroundColor: `${category.color}20` }}
+														>
+															{category.icon}
+														</motion.div>
+														<div className='flex-1 min-w-0'>
+															<input
+																type='text'
+																value={category.name}
+																onChange={e =>
+																	setCategories(
+																		categories.map(cat =>
+																			cat.id === category.id
+																				? { ...cat, name: e.target.value }
+																				: cat
+																		)
+																	)
+																}
+																className='w-full px-3 py-1.5 text-base font-medium border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+															/>
+														</div>
+														<motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+															<Button
+																variant='ghost'
+																size='icon'
+																onClick={() => handleRemoveCategory(category.id)}
+																className='text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20'
+															>
+																<Trash2 className='h-4 w-4' />
+															</Button>
+														</motion.div>
+													</div>
+
+													<div className='grid grid-cols-2 gap-3'>
+														<div>
+															<label className='block text-xs font-medium mb-1 text-gray-700 dark:text-gray-200'>
+																Сумма (BYN)
+															</label>
+															<input
+																type='number'
+																value={category.budgetAmount}
+																readOnly
+																className='w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white'
+															/>
+														</div>
+														<div>
+															<label className='block text-xs font-medium mb-1 text-gray-700 dark:text-gray-200'>
+																Процент (%)
+															</label>
+															<input
+																type='number'
+																value={category.percentage}
+																onChange={e =>
+																	handlePercentageChange(
+																		category.id,
+																		parseFloat(e.target.value) || 0
+																	)
+																}
+																className='w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+																step='1'
+																min='0'
+																max='100'
+															/>
+														</div>
+													</div>
+
+													<motion.div
+														initial={{ width: 0 }}
+														animate={{ width: `${Math.min(category.percentage, 100)}%` }}
+														className='h-2 rounded-full'
+														style={{ backgroundColor: category.color }}
+													/>
+												</motion.div>
+											))}
+										</AnimatePresence>
+									</div>
+
+									{categories.length === 0 && (
+										<motion.div
+											initial={{ opacity: 0, y: 20 }}
+											animate={{ opacity: 1, y: 0 }}
+											className='text-center py-8'
+										>
+											<p className='text-gray-500 dark:text-gray-400 mb-4'>Пока нет категорий</p>
+											<motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+												<Button onClick={() => setShowAddCategory(true)}>
+													<Plus className='h-4 w-4 mr-2' />
+													Добавить первую категорию
+												</Button>
+											</motion.div>
+										</motion.div>
+									)}
+								</CardContent>
+							</Card>
+
+							<div className='flex gap-3'>
+								<motion.div
+									whileHover={{ scale: 1.02 }}
+									whileTap={{ scale: 0.98 }}
+									className='flex-1'
+								>
+									<Button
+										variant='outline'
+										onClick={() => setStep(1)}
+										className='w-full dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+									>
+										<ArrowLeft className='h-4 w-4 mr-2' />
+										Назад
+									</Button>
+								</motion.div>
+								<motion.div
+									whileHover={{ scale: 1.02 }}
+									whileTap={{ scale: 0.98 }}
+									className='flex-1'
+								>
+									<Button
+										onClick={() => setStep(3)}
+										disabled={categories.length === 0}
+										className='w-full'
+									>
+										Далее
+										<ArrowRight className='h-4 w-4 ml-2' />
+									</Button>
+								</motion.div>
+							</div>
+						</motion.div>
+					)}
+
+					{/* Шаг 3: Проверка */}
+					{step === 3 && (
+						<motion.div
+							key='step3'
+							initial={{ opacity: 0, x: 100 }}
+							animate={{ opacity: 1, x: 0 }}
+							exit={{ opacity: 0, x: -100 }}
+							transition={{ type: 'spring', stiffness: 100 }}
+						>
+							<Card className='dark:bg-gray-800 dark:border-gray-700'>
+								<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
+									<CardTitle className='text-lg sm:text-xl dark:text-white'>
+										Шаг 3: Проверка и сохранение
+									</CardTitle>
+									<CardDescription className='text-xs sm:text-sm dark:text-gray-400'>
+										Проверьте ваш бюджет перед сохранением
+									</CardDescription>
+								</CardHeader>
+								<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6 space-y-6'>
+									<motion.div
+										initial={{ opacity: 0, scale: 0.9 }}
+										animate={{ opacity: 1, scale: 1 }}
+										className='bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-6 rounded-xl'
+									>
+										<p className='text-sm text-gray-600 dark:text-gray-400 mb-2'>
+											Общий бюджет на {getMonthName(month)} {year}
+										</p>
+										<p className='text-3xl sm:text-4xl font-bold text-blue-600 dark:text-blue-400'>
+											{formatCurrency(parseFloat(totalBudget))}
+										</p>
+									</motion.div>
+
+									<div className='space-y-3'>
+										<h3 className='font-semibold text-gray-900 dark:text-white'>
+											Категории ({categories.length}):
+										</h3>
+										{categories.map((category, index) => (
+											<motion.div
+												key={category.id}
+												initial={{ opacity: 0, x: -20 }}
+												animate={{ opacity: 1, x: 0 }}
+												transition={{ delay: index * 0.05 }}
+												className='flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg'
+											>
+												<div className='flex items-center gap-3'>
+													<div
+														className='w-10 h-10 rounded-full flex items-center justify-center text-xl'
+														style={{ backgroundColor: `${category.color}20` }}
+													>
+														{category.icon}
+													</div>
+													<div>
+														<p className='font-medium text-gray-900 dark:text-white'>
+															{category.name}
+														</p>
+														<p className='text-xs text-gray-500 dark:text-gray-400'>
+															{category.percentage.toFixed(1)}%
+														</p>
+													</div>
+												</div>
+												<p className='font-semibold text-gray-900 dark:text-white'>
+													{formatCurrency(category.budgetAmount)}
+												</p>
+											</motion.div>
+										))}
+									</div>
+
+									{Math.abs(totalPercentage - 100) > 1 && (
+										<motion.div
+											initial={{ opacity: 0, scale: 0.9 }}
+											animate={{ opacity: 1, scale: 1 }}
+											className='bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 p-4 rounded-lg'
+										>
+											<p className='text-sm text-orange-800 dark:text-orange-200'>
+												⚠️ Сумма процентов должна быть 100% (сейчас {totalPercentage.toFixed(1)}%)
+											</p>
+										</motion.div>
+									)}
+
+									<div className='flex gap-3'>
+										<motion.div
+											whileHover={{ scale: 1.02 }}
+											whileTap={{ scale: 0.98 }}
+											className='flex-1'
+										>
+											<Button
+												variant='outline'
+												onClick={() => setStep(2)}
+												className='w-full dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+											>
+												<ArrowLeft className='h-4 w-4 mr-2' />
+												Назад
+											</Button>
+										</motion.div>
+										<motion.div
+											whileHover={{ scale: 1.02 }}
+											whileTap={{ scale: 0.98 }}
+											className='flex-1'
+										>
+											<Button
+												onClick={handleSaveBudget}
+												disabled={saving || Math.abs(totalPercentage - 100) > 1}
+												className='w-full'
+											>
+												{saving ? 'Сохранение...' : 'Создать бюджет'}
+											</Button>
+										</motion.div>
+									</div>
+								</CardContent>
+							</Card>
+						</motion.div>
+					)}
+				</AnimatePresence>
+			</motion.main>
+
+			{/* Модальное окно добавления категории */}
+			<AnimatePresence>
+				{showAddCategory && (
+					<motion.div
+						variants={overlayVariants}
+						initial='hidden'
+						animate='visible'
+						exit='exit'
+						className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4'
+						onClick={() => {
+							setShowAddCategory(false)
+							setNewCategory({ name: '', icon: '📦', color: '#6b7280', amount: 0 })
+						}}
+					>
+						<motion.div
+							variants={modalVariants}
+							initial='hidden'
+							animate='visible'
+							exit='exit'
+							onClick={e => e.stopPropagation()}
+							className='w-full max-w-md'
+						>
+							<Card className='dark:bg-gray-800 dark:border-gray-700'>
+								<CardHeader className='pb-3'>
+									<div className='flex items-center justify-between'>
+										<CardTitle className='text-base sm:text-lg dark:text-white'>
+											Добавить категорию
+										</CardTitle>
 										<Button
 											variant='ghost'
 											size='icon'
-											onClick={() => handleDeleteCategory(category.id)}
-											className='text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 h-8 w-8 sm:h-9 sm:w-9 flex-shrink-0'
+											onClick={() => {
+												setShowAddCategory(false)
+												setNewCategory({ name: '', icon: '📦', color: '#6b7280', amount: 0 })
+											}}
+											className='dark:hover:bg-gray-700 h-8 w-8'
 										>
-											<Trash2 className='h-3 w-3 sm:h-4 sm:w-4' />
+											<X className='h-4 w-4' />
 										</Button>
 									</div>
-
-									<div className='grid grid-cols-1 xs:grid-cols-2 gap-2 sm:gap-3'>
-										<div>
-											<label className='block text-[10px] xs:text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-200'>
-												Сумма (BYN)
-											</label>
-											<input
-												type='number'
-												value={category.budgetAmount || ''}
-												onChange={e => handleCategoryAmountChange(category.id, e.target.value)}
-												className='w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
-												placeholder='0'
-												step='0.01'
-												min='0'
-											/>
-										</div>
-										<div>
-											<label className='block text-[10px] xs:text-xs sm:text-sm font-medium mb-1 text-gray-700 dark:text-gray-200'>
-												Процент (%)
-											</label>
-											<input
-												type='number'
-												value={category.percentage || ''}
-												onChange={e => handleCategoryPercentageChange(category.id, e.target.value)}
-												className='w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
-												placeholder='0'
-												step='1'
-												min='0'
-												max='100'
-											/>
-										</div>
-									</div>
-
-									<div className='h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden'>
-										<div
-											className='h-full transition-all'
-											style={{
-												width: `${Math.min(category.percentage, 100)}%`,
-												backgroundColor: category.color,
-											}}
+								</CardHeader>
+								<CardContent className='space-y-4'>
+									<motion.div
+										initial={{ opacity: 0, y: 10 }}
+										animate={{ opacity: 1, y: 0 }}
+										transition={{ delay: 0.1 }}
+									>
+										<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
+											Название категории
+										</label>
+										<input
+											type='text'
+											value={newCategory.name}
+											onChange={e => setNewCategory({ ...newCategory, name: e.target.value })}
+											className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+											placeholder='Например: Кафе'
+											autoFocus
 										/>
-									</div>
-								</div>
-							))}
-						</div>
-					</CardContent>
-				</Card>
+									</motion.div>
 
-				{showAddCategory && (
-					<div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4'>
-						<Card className='w-full max-w-md dark:bg-gray-800 dark:border-gray-700 max-h-[90vh] overflow-y-auto'>
-							<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
-								<div className='flex items-center justify-between'>
-									<CardTitle className='text-base sm:text-lg dark:text-white'>
-										Новая категория
-									</CardTitle>
-									<Button
-										variant='ghost'
-										size='icon'
-										onClick={() => {
-											setShowAddCategory(false)
-											setNewCategory({
-												name: '',
-												icon: '📦',
-												color: '#6b7280',
-												percentage: 5,
-											})
-										}}
-										className='dark:hover:bg-gray-700 h-8 w-8'
+									<motion.div
+										initial={{ opacity: 0, y: 10 }}
+										animate={{ opacity: 1, y: 0 }}
+										transition={{ delay: 0.2 }}
 									>
-										<X className='h-4 w-4' />
-									</Button>
-								</div>
-							</CardHeader>
-							<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6 space-y-3 sm:space-y-4'>
-								<div>
-									<label className='block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 text-gray-700 dark:text-gray-200'>
-										Название
-									</label>
-									<input
-										type='text'
-										value={newCategory.name}
-										onChange={e => setNewCategory({ ...newCategory, name: e.target.value })}
-										className='w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
-										placeholder='Название категории'
-										autoFocus
-									/>
-								</div>
+										<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
+											Выберите иконку
+										</label>
+										<div className='grid grid-cols-6 gap-2'>
+											{['🛒', '🚗', '🏠', '💊', '👔', '🎮', '📚', '🍔', '✈️', '🎬', '💰', '📦'].map(
+												emoji => (
+													<motion.button
+														key={emoji}
+														whileHover={{ scale: 1.1 }}
+														whileTap={{ scale: 0.9 }}
+														type='button'
+														onClick={() => setNewCategory({ ...newCategory, icon: emoji })}
+														className={`p-3 text-2xl rounded-lg border-2 transition-all ${
+															newCategory.icon === emoji
+																? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+																: 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+														}`}
+													>
+														{emoji}
+													</motion.button>
+												)
+											)}
+										</div>
+									</motion.div>
 
-								<div>
-									<label className='block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 text-gray-700 dark:text-gray-200'>
-										Выберите иконку
-									</label>
-									<div className='grid grid-cols-8 xs:grid-cols-10 gap-1.5 sm:gap-2 max-h-40 overflow-y-auto p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700'>
-										{EMOJI_LIST.map(emoji => (
-											<button
-												key={emoji}
-												type='button'
-												onClick={() => setNewCategory({ ...newCategory, icon: emoji })}
-												className={`w-8 h-8 sm:w-10 sm:h-10 text-lg sm:text-xl rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors ${
-													newCategory.icon === emoji
-														? 'bg-blue-100 dark:bg-blue-900 ring-2 ring-blue-500'
-														: ''
-												}`}
-											>
-												{emoji}
-											</button>
-										))}
-									</div>
-								</div>
-
-								<div>
-									<label className='block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 text-gray-700 dark:text-gray-200'>
-										Выберите цвет
-									</label>
-									<div className='grid grid-cols-5 gap-2 sm:gap-3'>
-										{COLOR_LIST.map(color => (
-											<button
-												key={color}
-												type='button'
-												onClick={() => setNewCategory({ ...newCategory, color })}
-												className={`w-full h-10 sm:h-12 rounded-lg transition-all ${
-													newCategory.color === color
-														? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
-														: 'hover:scale-105'
-												}`}
-												style={{ backgroundColor: color }}
-											/>
-										))}
-									</div>
-								</div>
-
-								<div>
-									<label className='block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 text-gray-700 dark:text-gray-200'>
-										Процент бюджета
-									</label>
-									<input
-										type='number'
-										value={newCategory.percentage}
-										onChange={e =>
-											setNewCategory({
-												...newCategory,
-												percentage: parseFloat(e.target.value) || 0,
-											})
-										}
-										className='w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
-										step='1'
-										min='0'
-										max='100'
-									/>
-								</div>
-
-								<div className='flex gap-2'>
-									<Button
-										onClick={handleAddCategory}
-										className='flex-1 text-sm sm:text-base h-9 sm:h-10'
+									<motion.div
+										initial={{ opacity: 0, y: 10 }}
+										animate={{ opacity: 1, y: 0 }}
+										transition={{ delay: 0.3 }}
 									>
-										Добавить
-									</Button>
-									<Button
-										variant='outline'
-										onClick={() => {
-											setShowAddCategory(false)
-											setNewCategory({
-												name: '',
-												icon: '📦',
-												color: '#6b7280',
-												percentage: 5,
-											})
-										}}
-										className='flex-1 text-sm sm:text-base h-9 sm:h-10 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+										<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
+											Выберите цвет
+										</label>
+										<div className='grid grid-cols-6 gap-2'>
+											{[
+												'#ef4444',
+												'#f97316',
+												'#f59e0b',
+												'#eab308',
+												'#84cc16',
+												'#22c55e',
+												'#10b981',
+												'#14b8a6',
+												'#06b6d4',
+												'#0ea5e9',
+												'#3b82f6',
+												'#6366f1',
+												'#8b5cf6',
+												'#a855f7',
+												'#d946ef',
+												'#ec4899',
+												'#f43f5e',
+												'#6b7280',
+											].map(color => (
+												<motion.button
+													key={color}
+													whileHover={{ scale: 1.1 }}
+													whileTap={{ scale: 0.9 }}
+													type='button'
+													onClick={() => setNewCategory({ ...newCategory, color })}
+													className={`w-10 h-10 rounded-lg border-2 transition-all ${
+														newCategory.color === color
+															? 'border-gray-900 dark:border-white ring-2 ring-offset-2 ring-gray-900 dark:ring-white'
+															: 'border-gray-200 dark:border-gray-700'
+													}`}
+													style={{ backgroundColor: color }}
+												/>
+											))}
+										</div>
+									</motion.div>
+
+									<motion.div
+										initial={{ opacity: 0, y: 10 }}
+										animate={{ opacity: 1, y: 0 }}
+										transition={{ delay: 0.4 }}
 									>
-										Отмена
-									</Button>
-								</div>
-							</CardContent>
-						</Card>
-					</div>
+										<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
+											Бюджет категории (BYN)
+										</label>
+										<input
+											type='number'
+											value={newCategory.amount || ''}
+											onChange={e =>
+												setNewCategory({
+													...newCategory,
+													amount: parseFloat(e.target.value) || 0,
+												})
+											}
+											className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+											placeholder='500.00'
+											step='0.01'
+											min='0'
+										/>
+										<p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+											Укажите сумму, которую планируете тратить в этой категории
+										</p>
+									</motion.div>
+
+									{newCategory.amount > 0 && totalBudget && parseFloat(totalBudget) > 0 && (
+										<motion.div
+											initial={{ opacity: 0, scale: 0.9 }}
+											animate={{ opacity: 1, scale: 1 }}
+											className='bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg'
+										>
+											<div className='flex justify-between items-center text-sm'>
+												<span className='text-gray-600 dark:text-gray-400'>
+													Процент от бюджета:
+												</span>
+												<span className='font-semibold text-blue-600 dark:text-blue-400'>
+													{((newCategory.amount / parseFloat(totalBudget)) * 100).toFixed(1)}%
+												</span>
+											</div>
+										</motion.div>
+									)}
+
+									<motion.div
+										initial={{ opacity: 0, y: 10 }}
+										animate={{ opacity: 1, y: 0 }}
+										transition={{ delay: 0.5 }}
+										className='flex gap-2 pt-2'
+									>
+										<Button
+											onClick={handleAddCategory}
+											disabled={
+												!newCategory.name ||
+												!newCategory.icon ||
+												!newCategory.color ||
+												newCategory.amount <= 0
+											}
+											className='flex-1'
+										>
+											Добавить
+										</Button>
+										<Button
+											variant='outline'
+											onClick={() => {
+												setShowAddCategory(false)
+												setNewCategory({ name: '', icon: '📦', color: '#6b7280', amount: 0 })
+											}}
+											className='flex-1 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+										>
+											Отмена
+										</Button>
+									</motion.div>
+								</CardContent>
+							</Card>
+						</motion.div>
+					</motion.div>
 				)}
-
-				<div className='flex gap-2 sm:gap-3'>
-					<Button
-						onClick={handleCreateBudget}
-						disabled={
-							loading ||
-							!totalAmount ||
-							parseFloat(totalAmount) <= 0 ||
-							Math.abs(totalPercentage - 100) > 1
-						}
-						className='flex-1 text-sm sm:text-base h-10 sm:h-11'
-					>
-						{loading ? 'Создание...' : 'Создать бюджет'}
-					</Button>
-					<Link href='/dashboard' className='flex-1'>
-						<Button
-							variant='outline'
-							className='w-full text-sm sm:text-base h-10 sm:h-11 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
-						>
-							Отмена
-						</Button>
-					</Link>
-				</div>
-			</main>
+			</AnimatePresence>
 		</div>
 	)
 }
