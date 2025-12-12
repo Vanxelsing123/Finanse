@@ -98,8 +98,16 @@ export async function PATCH(request: NextRequest) {
 			return NextResponse.json({ error: 'Savings not found' }, { status: 404 })
 		}
 
+		// Преобразуем Decimal в число
+		const currentAmount =
+			typeof savings.amount === 'string'
+				? parseFloat(savings.amount)
+				: typeof savings.amount === 'number'
+				? savings.amount
+				: Number(savings.amount)
+
 		const transactionAmount = type === 'ADD' ? amount : -amount
-		const newAmount = savings.amount + transactionAmount
+		const newAmount = currentAmount + transactionAmount
 
 		if (newAmount < 0) {
 			return NextResponse.json({ error: 'Insufficient funds' }, { status: 400 })
