@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { calculatePercentage, formatCurrency, getCurrentMonthYear, getMonthName } from '@/lib/utils'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, Variants } from 'framer-motion' // ← Добавьте Variants
 import {
 	ArrowRight,
 	ChevronLeft,
@@ -48,7 +48,8 @@ interface Goal {
 	percentage: number
 }
 
-const containerVariants = {
+// Варианты анимаций с типизацией
+const containerVariants: Variants = {
 	hidden: { opacity: 0 },
 	visible: {
 		opacity: 1,
@@ -59,26 +60,26 @@ const containerVariants = {
 	},
 }
 
-const itemVariants = {
+const itemVariants: Variants = {
 	hidden: { y: 20, opacity: 0 },
 	visible: {
 		y: 0,
 		opacity: 1,
 		transition: {
-			type: 'spring',
+			type: 'spring' as const,
 			stiffness: 100,
 			damping: 12,
 		},
 	},
 }
 
-const cardVariants = {
+const cardVariants: Variants = {
 	hidden: { scale: 0.8, opacity: 0 },
 	visible: {
 		scale: 1,
 		opacity: 1,
 		transition: {
-			type: 'spring',
+			type: 'spring' as const,
 			stiffness: 100,
 			damping: 15,
 		},
@@ -86,7 +87,7 @@ const cardVariants = {
 	hover: {
 		scale: 1.05,
 		transition: {
-			type: 'spring',
+			type: 'spring' as const,
 			stiffness: 400,
 			damping: 10,
 		},
@@ -94,13 +95,13 @@ const cardVariants = {
 	tap: { scale: 0.95 },
 }
 
-const modalVariants = {
+const modalVariants: Variants = {
 	hidden: { opacity: 0, scale: 0.8 },
 	visible: {
 		opacity: 1,
 		scale: 1,
 		transition: {
-			type: 'spring',
+			type: 'spring' as const,
 			stiffness: 300,
 			damping: 25,
 		},
@@ -114,7 +115,7 @@ const modalVariants = {
 	},
 }
 
-const overlayVariants = {
+const overlayVariants: Variants = {
 	hidden: { opacity: 0 },
 	visible: { opacity: 1 },
 	exit: { opacity: 0 },
