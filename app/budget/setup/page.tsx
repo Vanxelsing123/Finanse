@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency, getCurrentMonthYear, getMonthName } from '@/lib/utils'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, Variants } from 'framer-motion'
 import { ArrowLeft, ArrowRight, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -29,7 +29,7 @@ const DEFAULT_CATEGORIES = [
 	{ name: 'Прочее', icon: '📦', color: '#6b7280', percentage: 5 },
 ]
 
-const containerVariants = {
+const containerVariants: Variants = {
 	hidden: { opacity: 0 },
 	visible: {
 		opacity: 1,
@@ -39,32 +39,32 @@ const containerVariants = {
 	},
 }
 
-const itemVariants = {
+const itemVariants: Variants = {
 	hidden: { y: 20, opacity: 0 },
 	visible: {
 		y: 0,
 		opacity: 1,
 		transition: {
-			type: 'spring',
+			type: 'spring' as const,
 			stiffness: 100,
 		},
 	},
 }
 
-const overlayVariants = {
+const overlayVariants: Variants = {
 	hidden: { opacity: 0 },
 	visible: { opacity: 1 },
 	exit: { opacity: 0 },
 }
 
-const modalVariants = {
+const modalVariants: Variants = {
 	hidden: { opacity: 0, scale: 0.8, y: 50 },
 	visible: {
 		opacity: 1,
 		scale: 1,
 		y: 0,
 		transition: {
-			type: 'spring',
+			type: 'spring' as const,
 			stiffness: 300,
 			damping: 25,
 		},
