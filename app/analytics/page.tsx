@@ -2,20 +2,24 @@
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatCurrency, getCurrentMonthYear, getMonthName } from '@/lib/utils'
+import { Progress } from '@/components/ui/progress'
+import { calculatePercentage, formatCurrency, getCurrentMonthYear, getMonthName } from '@/lib/utils'
+import { motion, Variants } from 'framer-motion'
 import {
 	ArrowLeft,
-	Calendar,
+	ChevronLeft,
+	ChevronRight,
 	PieChart as PieChartIcon,
+	PiggyBank,
 	TrendingDown,
 	TrendingUp,
+	Wallet,
 } from 'lucide-react'
+import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import {
-	Area,
-	AreaChart,
 	Bar,
 	BarChart,
 	CartesianGrid,
@@ -29,144 +33,88 @@ import {
 	YAxis,
 } from 'recharts'
 
-interface MonthlyData {
+interface Category {
+	id: string
+	name: string
+	icon: string
+	color: string
+	budgetAmount: number
+	spent: number
+}
+
+interface Budget {
+	id: string
 	month: number
 	year: number
-	totalIncome: number
-	totalExpense: number
-	balance: number
-	categories: {
-		name: string
-		icon: string
-		color: string
-		amount: number
-		percentage: number
-	}[]
+	totalAmount: number
+	categories: Category[]
 }
 
-interface Transaction {
+interface Savings {
 	id: string
-	amount: number
-	date: string
-	type: 'INCOME' | 'EXPENSE'
-	category: {
-		name: string
-		icon: string
-		color: string
-	}
+	currency: string
+	amount: number | string
 }
 
-interface DayData {
-	day: number
-	expense: number
-	income: number
+const containerVariants: Variants = {
+	hidden: { opacity: 0 },
+	visible: {
+		opacity: 1,
+		transition: {
+			staggerChildren: 0.1,
+		},
+	},
+}
+
+const itemVariants: Variants = {
+	hidden: { y: 20, opacity: 0 },
+	visible: {
+		y: 0,
+		opacity: 1,
+		transition: {
+			type: 'spring' as const,
+			stiffness: 100,
+		},
+	},
 }
 
 export default function AnalyticsPage() {
+	const { data: session, status } = useSession()
 	const router = useRouter()
-	const [selectedMonth, setSelectedMonth] = useState(() => {
-		const { month, year } = getCurrentMonthYear()
-		return { month, year }
-	})
-	const [monthlyData, setMonthlyData] = useState<MonthlyData | null>(null)
-	const [transactions, setTransactions] = useState<Transaction[]>([])
-	const [dailyData, setDailyData] = useState<DayData[]>([])
+	const [selectedMonth, setSelectedMonth] = useState(() => getCurrentMonthYear())
+	const [budget, setBudget] = useState<Budget | null>(null)
+	const [savings, setSavings] = useState<Savings[]>([])
 	const [loading, setLoading] = useState(true)
 
 	useEffect(() => {
-		fetchAnalytics()
-	}, [selectedMonth])
+		if (status === 'unauthenticated') {
+			router.push('/auth/login')
+		}
+	}, [status, router])
 
-	const fetchAnalytics = async () => {
+	useEffect(() => {
+		if (status === 'authenticated') {
+			fetchData()
+		}
+	}, [status, selectedMonth])
+
+	const fetchData = async () => {
 		try {
 			setLoading(true)
 
-			const response = await fetch(
-				`/api/transactions?month=${selectedMonth.month}&year=${selectedMonth.year}`
+			// Загружаем бюджет
+			const budgetRes = await fetch(
+				`/api/budget?month=${selectedMonth.month}&year=${selectedMonth.year}`
 			)
-			const data = await response.json()
-			const allTransactions = data.transactions || []
+			const budgetData = await budgetRes.json()
+			setBudget(budgetData.budget)
 
-			setTransactions(allTransactions)
-
-			const income = allTransactions
-				.filter((t: Transaction) => t.type === 'INCOME')
-				.reduce((sum: number, t: Transaction) => sum + Number(t.amount), 0)
-
-			const expense = allTransactions
-				.filter((t: Transaction) => t.type === 'EXPENSE')
-				.reduce((sum: number, t: Transaction) => sum + Number(t.amount), 0)
-
-			const categoryMap = new Map<
-				string,
-				{ name: string; icon: string; color: string; amount: number }
-			>()
-
-			allTransactions
-				.filter((t: Transaction) => t.type === 'EXPENSE' && t.category)
-				.forEach((t: Transaction) => {
-					const key = t.category.name
-					const existing = categoryMap.get(key) || {
-						name: t.category.name,
-						icon: t.category.icon,
-						color: t.category.color,
-						amount: 0,
-					}
-					existing.amount += Number(t.amount)
-					categoryMap.set(key, existing)
-				})
-
-			const categories = Array.from(categoryMap.values())
-				.map(cat => ({
-					...cat,
-					percentage: expense > 0 ? Math.round((cat.amount / expense) * 100) : 0,
-				}))
-				.sort((a, b) => b.amount - a.amount)
-
-			setMonthlyData({
-				month: selectedMonth.month,
-				year: selectedMonth.year,
-				totalIncome: income,
-				totalExpense: expense,
-				balance: income - expense,
-				categories,
-			})
-
-			// Подготовка данных по дням
-			const daysInMonth = new Date(selectedMonth.year, selectedMonth.month, 0).getDate()
-			const dailyMap = new Map<number, { expense: number; income: number }>()
-
-			for (let day = 1; day <= daysInMonth; day++) {
-				dailyMap.set(day, { expense: 0, income: 0 })
-			}
-
-			allTransactions.forEach((t: Transaction) => {
-				const tDate = new Date(t.date)
-				if (
-					tDate.getMonth() + 1 === selectedMonth.month &&
-					tDate.getFullYear() === selectedMonth.year
-				) {
-					const day = tDate.getDate()
-					const existing = dailyMap.get(day)!
-					if (t.type === 'EXPENSE') {
-						existing.expense += Number(t.amount)
-					} else {
-						existing.income += Number(t.amount)
-					}
-				}
-			})
-
-			const dailyArray = Array.from(dailyMap.entries())
-				.map(([day, data]) => ({
-					day,
-					expense: data.expense,
-					income: data.income,
-				}))
-				.filter(d => d.expense > 0 || d.income > 0)
-
-			setDailyData(dailyArray)
+			// Загружаем накопления
+			const savingsRes = await fetch('/api/savings')
+			const savingsData = await savingsRes.json()
+			setSavings(savingsData.savings || [])
 		} catch (error) {
-			console.error('Error fetching analytics:', error)
+			console.error('Error fetching data:', error)
 		} finally {
 			setLoading(false)
 		}
@@ -187,208 +135,291 @@ export default function AnalyticsPage() {
 		setSelectedMonth({ month: newMonth, year: newYear })
 	}
 
-	if (loading) {
+	if (status === 'loading' || loading) {
 		return (
 			<div className='min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900'>
-				<div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600'></div>
+				<motion.div
+					initial={{ opacity: 0, scale: 0.5 }}
+					animate={{ opacity: 1, scale: 1 }}
+					transition={{ duration: 0.5 }}
+					className='text-center'
+				>
+					<motion.div
+						animate={{ rotate: 360 }}
+						transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+						className='rounded-full h-12 w-12 border-b-2 border-primary mx-auto'
+					></motion.div>
+					<motion.p
+						initial={{ opacity: 0, y: 10 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{ delay: 0.2 }}
+						className='mt-4 text-gray-600 dark:text-gray-300'
+					>
+						Загрузка...
+					</motion.p>
+				</motion.div>
 			</div>
 		)
 	}
 
-	const topCategories = monthlyData?.categories.slice(0, 5) || []
+	if (!budget) {
+		return (
+			<div className='min-h-screen bg-gray-50 dark:bg-gray-900'>
+				<motion.header
+					initial={{ y: -100 }}
+					animate={{ y: 0 }}
+					transition={{ type: 'spring' as const, stiffness: 100 }}
+					className='bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10'
+				>
+					<div className='container mx-auto px-3 sm:px-4 py-3 sm:py-4'>
+						<div className='flex items-center justify-between'>
+							<Link href='/dashboard'>
+								<motion.div whileHover={{ x: -5 }} whileTap={{ scale: 0.95 }}>
+									<Button variant='ghost' size='sm' className='dark:text-gray-200'>
+										<ArrowLeft className='h-4 w-4 mr-2' />
+										Назад
+									</Button>
+								</motion.div>
+							</Link>
+							<h1 className='text-lg sm:text-xl font-bold text-gray-900 dark:text-white'>
+								Аналитика
+							</h1>
+							<div className='w-16 sm:w-20'></div>
+						</div>
+					</div>
+				</motion.header>
+
+				<div className='container mx-auto px-3 sm:px-4 py-6'>
+					<Card className='dark:bg-gray-800 dark:border-gray-700'>
+						<CardHeader>
+							<CardTitle className='dark:text-white'>Нет данных</CardTitle>
+							<CardDescription className='dark:text-gray-400'>
+								Создайте бюджет для просмотра аналитики
+							</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<Link href='/budget/setup'>
+								<Button>Создать бюджет</Button>
+							</Link>
+						</CardContent>
+					</Card>
+				</div>
+			</div>
+		)
+	}
+
+	const totalSpent = budget.categories.reduce((sum, cat) => sum + cat.spent, 0)
+	const totalBudget = Number(budget.totalAmount)
+	const remaining = totalBudget - totalSpent
+	const spentPercentage = calculatePercentage(totalSpent, totalBudget)
+
+	// Вычисляем общую сумму накоплений
+	const totalSavings = savings.reduce((sum, s) => {
+		const amount = typeof s.amount === 'string' ? parseFloat(s.amount) : Number(s.amount)
+		return sum + amount
+	}, 0)
+
+	// Топ категории по тратам
+	const topCategories = [...budget.categories]
+		.filter(cat => cat.spent > 0)
+		.sort((a, b) => b.spent - a.spent)
+		.slice(0, 5)
+
+	// Категории с перерасходом
+	const overBudgetCategories = budget.categories.filter(cat => cat.spent > Number(cat.budgetAmount))
+
+	// Данные для круговой диаграммы
+	const pieData = topCategories.map(cat => ({
+		name: cat.name,
+		value: cat.spent,
+		color: cat.color,
+		icon: cat.icon,
+	}))
+
+	// Данные для столбчатой диаграммы
+	const barData = topCategories.map(cat => ({
+		name: cat.name,
+		spent: cat.spent,
+		budget: Number(cat.budgetAmount),
+		color: cat.color,
+		icon: cat.icon,
+	}))
 
 	return (
 		<div className='min-h-screen bg-gray-50 dark:bg-gray-900 pb-20'>
-			<header className='bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10'>
-				<div className='container mx-auto px-4 py-4'>
+			{/* Header */}
+			<motion.header
+				initial={{ y: -100 }}
+				animate={{ y: 0 }}
+				transition={{ type: 'spring' as const, stiffness: 100 }}
+				className='bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10'
+			>
+				<div className='container mx-auto px-3 sm:px-4 py-3 sm:py-4'>
 					<div className='flex items-center justify-between'>
 						<Link href='/dashboard'>
-							<Button
-								variant='ghost'
-								size='sm'
-								className='dark:text-gray-200 dark:hover:bg-gray-700'
-							>
-								<ArrowLeft className='h-4 w-4 mr-2' />
-								Назад
-							</Button>
+							<motion.div whileHover={{ x: -5 }} whileTap={{ scale: 0.95 }}>
+								<Button
+									variant='ghost'
+									size='sm'
+									className='dark:text-gray-200 dark:hover:bg-gray-700'
+								>
+									<ArrowLeft className='h-4 w-4 mr-2' />
+									Назад
+								</Button>
+							</motion.div>
 						</Link>
-						<h1 className='text-xl font-bold text-gray-900 dark:text-white'>Аналитика</h1>
-						<div className='w-20'></div>
+						<h1 className='text-lg sm:text-xl font-bold text-gray-900 dark:text-white'>
+							Аналитика
+						</h1>
+						<div className='w-16 sm:w-20'></div>
 					</div>
 				</div>
-			</header>
+			</motion.header>
 
-			<main className='container mx-auto px-4 py-6 max-w-6xl space-y-6'>
+			<motion.div
+				variants={containerVariants}
+				initial='hidden'
+				animate='visible'
+				className='container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-6xl space-y-4 sm:space-y-6'
+			>
 				{/* Переключатель месяца */}
-				<Card className='dark:bg-gray-800 dark:border-gray-700'>
-					<CardContent className='pt-6'>
-						<div className='flex items-center justify-between'>
-							<Button
-								variant='outline'
-								size='sm'
-								onClick={() => changeMonth(-1)}
-								className='dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
-							>
-								←
-							</Button>
-							<div className='text-center'>
-								<div className='text-2xl font-bold text-gray-900 dark:text-white'>
-									{getMonthName(selectedMonth.month)} {selectedMonth.year}
+				<motion.div variants={itemVariants}>
+					<Card className='dark:bg-gray-800 dark:border-gray-700'>
+						<CardContent className='pt-4 sm:pt-6'>
+							<div className='flex items-center justify-between'>
+								<motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+									<Button
+										variant='outline'
+										size='icon'
+										onClick={() => changeMonth(-1)}
+										className='dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 h-8 w-8 sm:h-10 sm:w-10'
+									>
+										<ChevronLeft className='h-4 w-4' />
+									</Button>
+								</motion.div>
+								<div className='text-center'>
+									<div className='text-xl sm:text-2xl font-bold text-gray-900 dark:text-white'>
+										{getMonthName(selectedMonth.month)} {selectedMonth.year}
+									</div>
+									<div className='text-xs sm:text-sm text-gray-600 dark:text-gray-400'>
+										{budget.categories.length} категорий
+									</div>
 								</div>
-								<div className='text-sm text-gray-600 dark:text-gray-400'>
-									{transactions.length} транзакций
-								</div>
+								<motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+									<Button
+										variant='outline'
+										size='icon'
+										onClick={() => changeMonth(1)}
+										className='dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 h-8 w-8 sm:h-10 sm:w-10'
+									>
+										<ChevronRight className='h-4 w-4' />
+									</Button>
+								</motion.div>
 							</div>
-							<Button
-								variant='outline'
-								size='sm'
-								onClick={() => changeMonth(1)}
-								className='dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
-							>
-								→
-							</Button>
-						</div>
-					</CardContent>
-				</Card>
-
-				{/* Общая статистика */}
-				<div className='grid md:grid-cols-3 gap-4'>
-					<Card className='dark:bg-gray-800 dark:border-gray-700'>
-						<CardHeader className='pb-2'>
-							<CardDescription className='flex items-center gap-2 dark:text-gray-400'>
-								<TrendingUp className='h-4 w-4 text-green-600' />
-								Доходы
-							</CardDescription>
-							<CardTitle className='text-2xl text-green-600 dark:text-green-400'>
-								+{formatCurrency(monthlyData?.totalIncome || 0)}
-							</CardTitle>
-						</CardHeader>
-					</Card>
-
-					<Card className='dark:bg-gray-800 dark:border-gray-700'>
-						<CardHeader className='pb-2'>
-							<CardDescription className='flex items-center gap-2 dark:text-gray-400'>
-								<TrendingDown className='h-4 w-4 text-red-600' />
-								Расходы
-							</CardDescription>
-							<CardTitle className='text-2xl text-red-600 dark:text-red-400'>
-								-{formatCurrency(monthlyData?.totalExpense || 0)}
-							</CardTitle>
-						</CardHeader>
-					</Card>
-
-					<Card
-						className={`dark:border-gray-700 ${
-							(monthlyData?.balance || 0) >= 0
-								? 'bg-green-50 dark:bg-green-900/20'
-								: 'bg-red-50 dark:bg-red-900/20'
-						}`}
-					>
-						<CardHeader className='pb-2'>
-							<CardDescription className='dark:text-gray-400'>Баланс</CardDescription>
-							<CardTitle
-								className={`text-2xl ${
-									(monthlyData?.balance || 0) >= 0
-										? 'text-green-600 dark:text-green-400'
-										: 'text-red-600 dark:text-red-400'
-								}`}
-							>
-								{(monthlyData?.balance || 0) >= 0 ? '+' : ''}
-								{formatCurrency(monthlyData?.balance || 0)}
-							</CardTitle>
-						</CardHeader>
-					</Card>
-				</div>
-
-				{/* График расходов и доходов по дням */}
-				{dailyData.length > 0 && (
-					<Card className='dark:bg-gray-800 dark:border-gray-700'>
-						<CardHeader>
-							<CardTitle className='flex items-center gap-2 dark:text-white'>
-								<Calendar className='h-5 w-5' />
-								Динамика доходов и расходов
-							</CardTitle>
-							<CardDescription className='dark:text-gray-400'>По дням месяца</CardDescription>
-						</CardHeader>
-						<CardContent>
-							<ResponsiveContainer width='100%' height={300}>
-								<AreaChart data={dailyData}>
-									<defs>
-										<linearGradient id='colorExpense' x1='0' y1='0' x2='0' y2='1'>
-											<stop offset='5%' stopColor='#ef4444' stopOpacity={0.8} />
-											<stop offset='95%' stopColor='#ef4444' stopOpacity={0} />
-										</linearGradient>
-										<linearGradient id='colorIncome' x1='0' y1='0' x2='0' y2='1'>
-											<stop offset='5%' stopColor='#10b981' stopOpacity={0.8} />
-											<stop offset='95%' stopColor='#10b981' stopOpacity={0} />
-										</linearGradient>
-									</defs>
-									<CartesianGrid strokeDasharray='3 3' stroke='#374151' />
-									<XAxis
-										dataKey='day'
-										stroke='#9ca3af'
-										label={{ value: 'День', position: 'insideBottom', offset: -5, fill: '#9ca3af' }}
-									/>
-									<YAxis
-										stroke='#9ca3af'
-										label={{ value: 'BYN', angle: -90, position: 'insideLeft', fill: '#9ca3af' }}
-									/>
-									<Tooltip
-										contentStyle={{
-											backgroundColor: '#1f2937',
-											border: '1px solid #374151',
-											borderRadius: '8px',
-											color: '#fff',
-										}}
-										formatter={(value: any) => `${value.toFixed(2)} BYN`}
-									/>
-									<Legend />
-									<Area
-										type='monotone'
-										dataKey='expense'
-										stroke='#ef4444'
-										fillOpacity={1}
-										fill='url(#colorExpense)'
-										name='Расходы'
-									/>
-									<Area
-										type='monotone'
-										dataKey='income'
-										stroke='#10b981'
-										fillOpacity={1}
-										fill='url(#colorIncome)'
-										name='Доходы'
-									/>
-								</AreaChart>
-							</ResponsiveContainer>
 						</CardContent>
 					</Card>
-				)}
+				</motion.div>
 
-				{/* Круговая диаграмма категорий */}
+				{/* Общая статистика */}
+				<motion.div
+					variants={itemVariants}
+					className='grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4'
+				>
+					<Card className='dark:bg-gray-800 dark:border-gray-700'>
+						<CardHeader className='pb-2 px-3 sm:px-6 pt-3 sm:pt-6'>
+							<CardDescription className='flex items-center gap-1 dark:text-gray-400 text-xs'>
+								<Wallet className='h-3 w-3' />
+								Бюджет
+							</CardDescription>
+							<CardTitle className='text-lg sm:text-2xl dark:text-white'>
+								{formatCurrency(totalBudget)}
+							</CardTitle>
+						</CardHeader>
+					</Card>
+
+					<Card className='dark:bg-gray-800 dark:border-gray-700'>
+						<CardHeader className='pb-2 px-3 sm:px-6 pt-3 sm:pt-6'>
+							<CardDescription className='flex items-center gap-1 dark:text-gray-400 text-xs'>
+								<TrendingDown className='h-3 w-3 text-red-500' />
+								Потрачено
+							</CardDescription>
+							<CardTitle className='text-lg sm:text-2xl text-red-600 dark:text-red-400'>
+								{formatCurrency(totalSpent)}
+							</CardTitle>
+						</CardHeader>
+					</Card>
+
+					<Card className='dark:bg-gray-800 dark:border-gray-700'>
+						<CardHeader className='pb-2 px-3 sm:px-6 pt-3 sm:pt-6'>
+							<CardDescription className='flex items-center gap-1 dark:text-gray-400 text-xs'>
+								<TrendingUp className='h-3 w-3 text-green-500' />
+								Осталось
+							</CardDescription>
+							<CardTitle className='text-lg sm:text-2xl text-green-600 dark:text-green-400'>
+								{formatCurrency(remaining)}
+							</CardTitle>
+						</CardHeader>
+					</Card>
+
+					<Card className='dark:bg-gray-800 dark:border-gray-700'>
+						<CardHeader className='pb-2 px-3 sm:px-6 pt-3 sm:pt-6'>
+							<CardDescription className='flex items-center gap-1 dark:text-gray-400 text-xs'>
+								<PiggyBank className='h-3 w-3 text-blue-500' />
+								Накопления
+							</CardDescription>
+							<CardTitle className='text-lg sm:text-2xl text-blue-600 dark:text-blue-400'>
+								{formatCurrency(totalSavings)}
+							</CardTitle>
+						</CardHeader>
+					</Card>
+				</motion.div>
+
+				{/* Прогресс расходов */}
+				<motion.div variants={itemVariants}>
+					<Card className='dark:bg-gray-800 dark:border-gray-700'>
+						<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
+							<CardTitle className='dark:text-white text-base sm:text-lg'>
+								Прогресс расходов
+							</CardTitle>
+							<CardDescription className='dark:text-gray-400 text-xs sm:text-sm'>
+								{spentPercentage}% от бюджета использовано
+							</CardDescription>
+						</CardHeader>
+						<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6'>
+							<Progress value={spentPercentage} className='h-2 sm:h-3' />
+							<div className='flex justify-between mt-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400'>
+								<span>{formatCurrency(totalSpent)} потрачено</span>
+								<span>{formatCurrency(remaining)} осталось</span>
+							</div>
+						</CardContent>
+					</Card>
+				</motion.div>
+
+				{/* Диаграммы */}
 				{topCategories.length > 0 && (
-					<div className='grid md:grid-cols-2 gap-6'>
+					<motion.div variants={itemVariants} className='grid md:grid-cols-2 gap-4 sm:gap-6'>
+						{/* Круговая диаграмма */}
 						<Card className='dark:bg-gray-800 dark:border-gray-700'>
-							<CardHeader>
-								<CardTitle className='flex items-center gap-2 dark:text-white'>
-									<PieChartIcon className='h-5 w-5' />
+							<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
+								<CardTitle className='flex items-center gap-2 dark:text-white text-base sm:text-lg'>
+									<PieChartIcon className='h-4 w-4 sm:h-5 sm:w-5' />
 									Распределение расходов
 								</CardTitle>
 							</CardHeader>
-							<CardContent>
-								<ResponsiveContainer width='100%' height={300}>
+							<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6'>
+								<ResponsiveContainer width='100%' height={250}>
 									<PieChart>
 										<Pie
-											data={topCategories}
+											data={pieData}
 											cx='50%'
 											cy='50%'
 											labelLine={false}
-											label={({ name, percentage }) => `${name}: ${percentage}%`}
-											outerRadius={100}
+											label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+											outerRadius={80}
 											fill='#8884d8'
-											dataKey='amount'
+											dataKey='value'
 										>
-											{topCategories.map((entry, index) => (
+											{pieData.map((entry, index) => (
 												<Cell key={`cell-${index}`} fill={entry.color} />
 											))}
 										</Pie>
@@ -399,27 +430,26 @@ export default function AnalyticsPage() {
 												borderRadius: '8px',
 												color: '#fff',
 											}}
-											formatter={(value: any) => `${formatCurrency(value)}`}
+											formatter={(value: any) => formatCurrency(value)}
 										/>
 									</PieChart>
 								</ResponsiveContainer>
 							</CardContent>
 						</Card>
 
-						{/* Столбчатая диаграмма топ категорий */}
+						{/* Столбчатая диаграмма */}
 						<Card className='dark:bg-gray-800 dark:border-gray-700'>
-							<CardHeader>
-								<CardTitle className='dark:text-white'>Топ категорий</CardTitle>
+							<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
+								<CardTitle className='dark:text-white text-base sm:text-lg'>
+									Топ категорий
+								</CardTitle>
 							</CardHeader>
-							<CardContent>
-								<ResponsiveContainer width='100%' height={300}>
-									<BarChart data={topCategories}>
+							<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6'>
+								<ResponsiveContainer width='100%' height={250}>
+									<BarChart data={barData}>
 										<CartesianGrid strokeDasharray='3 3' stroke='#374151' />
-										<XAxis dataKey='icon' stroke='#9ca3af' style={{ fontSize: '20px' }} />
-										<YAxis
-											stroke='#9ca3af'
-											label={{ value: 'BYN', angle: -90, position: 'insideLeft', fill: '#9ca3af' }}
-										/>
+										<XAxis dataKey='icon' stroke='#9ca3af' style={{ fontSize: '18px' }} />
+										<YAxis stroke='#9ca3af' />
 										<Tooltip
 											contentStyle={{
 												backgroundColor: '#1f2937',
@@ -427,92 +457,217 @@ export default function AnalyticsPage() {
 												borderRadius: '8px',
 												color: '#fff',
 											}}
-											formatter={(value: any, name: any, props: any) => [
-												`${formatCurrency(value)}`,
-												props.payload.name,
+											formatter={(value: any, name: any) => [
+												formatCurrency(value),
+												name === 'spent' ? 'Потрачено' : 'Бюджет',
 											]}
 										/>
-										<Bar dataKey='amount' radius={[8, 8, 0, 0]}>
-											{topCategories.map((entry, index) => (
+										<Legend />
+										<Bar dataKey='spent' fill='#ef4444' name='Потрачено' radius={[8, 8, 0, 0]}>
+											{barData.map((entry, index) => (
 												<Cell key={`cell-${index}`} fill={entry.color} />
 											))}
 										</Bar>
+										<Bar dataKey='budget' fill='#94a3b8' name='Бюджет' radius={[8, 8, 0, 0]} />
 									</BarChart>
 								</ResponsiveContainer>
 							</CardContent>
 						</Card>
-					</div>
+					</motion.div>
 				)}
 
-				{/* Детальная таблица категорий */}
-				<Card className='dark:bg-gray-800 dark:border-gray-700'>
-					<CardHeader>
-						<CardTitle className='dark:text-white'>Детализация по категориям</CardTitle>
-					</CardHeader>
-					<CardContent>
-						{topCategories.length === 0 ? (
-							<div className='text-center py-8 text-gray-600 dark:text-gray-400'>
-								Нет данных за этот месяц
-							</div>
-						) : (
-							<div className='space-y-4'>
-								{topCategories.map((category, index) => (
-									<div key={index} className='space-y-2'>
-										<div className='flex items-center justify-between'>
-											<div className='flex items-center gap-3'>
-												<div className='text-2xl'>{category.icon}</div>
-												<div>
-													<div className='font-medium text-gray-900 dark:text-white'>
-														{category.name}
-													</div>
-													<div className='text-sm text-gray-600 dark:text-gray-400'>
-														{category.percentage}% от всех расходов
-													</div>
-												</div>
-											</div>
-											<div className='text-right'>
-												<div className='font-bold text-red-600 dark:text-red-400'>
-													{formatCurrency(category.amount)}
-												</div>
-											</div>
-										</div>
-										<div className='w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2'>
-											<div
-												className='h-2 rounded-full transition-all'
-												style={{
-													width: `${category.percentage}%`,
-													backgroundColor: category.color,
-												}}
-											/>
-										</div>
-									</div>
-								))}
-							</div>
-						)}
-					</CardContent>
-				</Card>
-
-				{/* Пустое состояние */}
-				{transactions.length === 0 && (
+				{/* Детализация по категориям */}
+				<motion.div variants={itemVariants}>
 					<Card className='dark:bg-gray-800 dark:border-gray-700'>
-						<CardContent className='pt-6 text-center py-12'>
-							<div className='text-6xl mb-4'>📊</div>
-							<h3 className='text-xl font-bold mb-2 text-gray-900 dark:text-white'>
-								Нет данных для анализа
-							</h3>
-							<p className='text-gray-600 dark:text-gray-400 mb-6'>
-								Добавьте транзакции, чтобы увидеть аналитику
-							</p>
-							<Link href='/transactions/new'>
-								<Button>
-									<TrendingUp className='h-4 w-4 mr-2' />
-									Добавить трату
-								</Button>
-							</Link>
+						<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
+							<CardTitle className='dark:text-white text-base sm:text-lg'>
+								Детализация по категориям
+							</CardTitle>
+							<CardDescription className='dark:text-gray-400 text-xs sm:text-sm'>
+								Все категории с тратами
+							</CardDescription>
+						</CardHeader>
+						<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6'>
+							{topCategories.length === 0 ? (
+								<div className='text-center py-8 text-gray-600 dark:text-gray-400'>
+									<div className='text-4xl sm:text-6xl mb-4'>📊</div>
+									<p className='text-sm sm:text-base'>Нет трат за этот месяц</p>
+								</div>
+							) : (
+								<div className='space-y-3 sm:space-y-4'>
+									{topCategories.map((category, index) => {
+										const percentage = calculatePercentage(
+											category.spent,
+											Number(category.budgetAmount)
+										)
+										const isOverBudget = category.spent > Number(category.budgetAmount)
+
+										return (
+											<motion.div
+												key={category.id}
+												initial={{ opacity: 0, x: -20 }}
+												animate={{ opacity: 1, x: 0 }}
+												transition={{ delay: index * 0.05 }}
+												className='space-y-2'
+											>
+												<div className='flex items-center justify-between'>
+													<div className='flex items-center gap-2 sm:gap-3 flex-1 min-w-0'>
+														<div className='text-xl sm:text-2xl'>{category.icon}</div>
+														<div className='min-w-0 flex-1'>
+															<p className='font-medium text-sm sm:text-base text-gray-900 dark:text-white truncate'>
+																{category.name}
+															</p>
+															<p className='text-xs text-gray-600 dark:text-gray-400'>
+																{formatCurrency(category.spent)} /{' '}
+																{formatCurrency(category.budgetAmount)}
+															</p>
+														</div>
+													</div>
+													<div className='text-right'>
+														<p
+															className={`font-bold text-sm sm:text-base ${
+																isOverBudget
+																	? 'text-red-600 dark:text-red-400'
+																	: 'text-green-600 dark:text-green-400'
+															}`}
+														>
+															{percentage}%
+														</p>
+													</div>
+												</div>
+												<div className='w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2'>
+													<div
+														className='h-2 rounded-full transition-all'
+														style={{
+															width: `${Math.min(percentage, 100)}%`,
+															backgroundColor: category.color,
+														}}
+													/>
+												</div>
+											</motion.div>
+										)
+									})}
+								</div>
+							)}
 						</CardContent>
 					</Card>
+				</motion.div>
+
+				{/* Накопления по валютам */}
+				{savings.length > 0 && (
+					<motion.div variants={itemVariants}>
+						<Card className='dark:bg-gray-800 dark:border-gray-700'>
+							<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
+								<CardTitle className='dark:text-white text-base sm:text-lg'>
+									Накопления по валютам
+								</CardTitle>
+								<CardDescription className='dark:text-gray-400 text-xs sm:text-sm'>
+									Всего: {formatCurrency(totalSavings)}
+								</CardDescription>
+							</CardHeader>
+							<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6'>
+								<div className='space-y-3'>
+									{savings.map((saving, index) => {
+										const amount =
+											typeof saving.amount === 'string'
+												? parseFloat(saving.amount)
+												: Number(saving.amount)
+										const percentage = totalSavings > 0 ? (amount / totalSavings) * 100 : 0
+
+										return (
+											<motion.div
+												key={saving.id}
+												initial={{ opacity: 0, x: -20 }}
+												animate={{ opacity: 1, x: 0 }}
+												transition={{ delay: index * 0.1 }}
+												className='space-y-2'
+											>
+												<div className='flex items-center justify-between'>
+													<div className='flex items-center gap-2'>
+														<span className='text-base sm:text-lg font-semibold'>
+															{saving.currency}
+														</span>
+													</div>
+													<div className='text-right'>
+														<p className='font-semibold text-sm sm:text-base text-blue-600 dark:text-blue-400'>
+															{formatCurrency(amount)}
+														</p>
+														<p className='text-xs text-gray-600 dark:text-gray-400'>
+															{percentage.toFixed(1)}%
+														</p>
+													</div>
+												</div>
+												<Progress value={percentage} className='h-2' />
+											</motion.div>
+										)
+									})}
+								</div>
+							</CardContent>
+						</Card>
+					</motion.div>
 				)}
-			</main>
+
+				{/* Статистика */}
+				<motion.div
+					variants={itemVariants}
+					className='grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4'
+				>
+					<Card
+						className={`dark:border-gray-700 ${
+							overBudgetCategories.length > 0
+								? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+								: 'dark:bg-gray-800'
+						}`}
+					>
+						<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
+							<CardTitle className='dark:text-white text-base sm:text-lg'>Перерасход</CardTitle>
+							<CardDescription className='dark:text-gray-400 text-xs sm:text-sm'>
+								Категорий с превышением
+							</CardDescription>
+						</CardHeader>
+						<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6'>
+							<p
+								className={`text-3xl sm:text-4xl font-bold ${
+									overBudgetCategories.length > 0
+										? 'text-red-600 dark:text-red-400'
+										: 'text-green-600 dark:text-green-400'
+								}`}
+							>
+								{overBudgetCategories.length}
+							</p>
+							{overBudgetCategories.length > 0 && (
+								<div className='mt-3 space-y-1'>
+									{overBudgetCategories.map(cat => (
+										<p key={cat.id} className='text-xs text-gray-600 dark:text-gray-400'>
+											{cat.icon} {cat.name}:{' '}
+											<span className='text-red-600 dark:text-red-400 font-semibold'>
+												+{formatCurrency(cat.spent - Number(cat.budgetAmount))}
+											</span>
+										</p>
+									))}
+								</div>
+							)}
+						</CardContent>
+					</Card>
+
+					<Card className='dark:bg-gray-800 dark:border-gray-700'>
+						<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
+							<CardTitle className='dark:text-white text-base sm:text-lg'>Эффективность</CardTitle>
+							<CardDescription className='dark:text-gray-400 text-xs sm:text-sm'>
+								Процент сбережений
+							</CardDescription>
+						</CardHeader>
+						<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6'>
+							<p className='text-3xl sm:text-4xl font-bold text-primary'>
+								{totalBudget > 0 ? ((remaining / totalBudget) * 100).toFixed(1) : 0}%
+							</p>
+							<p className='text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-2'>
+								{remaining >= 0 ? 'Вы укладываетесь в бюджет! 🎉' : 'Превышен бюджет 😔'}
+							</p>
+						</CardContent>
+					</Card>
+				</motion.div>
+			</motion.div>
 		</div>
 	)
 }
