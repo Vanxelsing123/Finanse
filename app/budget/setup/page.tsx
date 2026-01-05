@@ -6,7 +6,7 @@ import { formatCurrency, getCurrentMonthYear, getMonthName } from '@/lib/utils'
 import { AnimatePresence, motion, Variants } from 'framer-motion'
 import { ArrowLeft, ArrowRight, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 
 interface Category {
@@ -78,8 +78,21 @@ const modalVariants: Variants = {
 
 export default function BudgetSetupPage() {
 	const router = useRouter()
+	const searchParams = useSearchParams()
+
+	// ✅ Получаем месяц из query параметров или используем текущий
+	const queryMonth = searchParams.get('month')
+	const queryYear = searchParams.get('year')
+
+	const { month, year } =
+		queryMonth && queryYear
+			? { month: parseInt(queryMonth), year: parseInt(queryYear) }
+			: getCurrentMonthYear()
+
 	const [step, setStep] = useState(1)
 	const [totalBudget, setTotalBudget] = useState('')
+	const [startDay, setStartDay] = useState(1)
+	const [endDay, setEndDay] = useState(31)
 	const [categories, setCategories] = useState<Category[]>([])
 	const [showAddCategory, setShowAddCategory] = useState(false)
 	const [newCategory, setNewCategory] = useState({
@@ -89,8 +102,6 @@ export default function BudgetSetupPage() {
 		amount: 0,
 	})
 	const [saving, setSaving] = useState(false)
-
-	const { month, year } = getCurrentMonthYear()
 
 	const handleUseDefaults = () => {
 		const budget = parseFloat(totalBudget)
@@ -192,6 +203,8 @@ export default function BudgetSetupPage() {
 					month,
 					year,
 					totalAmount: parseFloat(totalBudget),
+					startDay,
+					endDay,
 					categories: categories.map(cat => ({
 						name: cat.name,
 						icon: cat.icon,
@@ -202,7 +215,7 @@ export default function BudgetSetupPage() {
 			})
 
 			if (response.ok) {
-				router.push('/dashboard')
+				router.push(`/dashboard?month=${month}&year=${year}`)
 			} else {
 				const data = await response.json()
 				alert(data.error || 'Ошибка при создании бюджета')
@@ -223,12 +236,12 @@ export default function BudgetSetupPage() {
 			<motion.header
 				initial={{ y: -100 }}
 				animate={{ y: 0 }}
-				transition={{ type: 'spring', stiffness: 100 }}
+				transition={{ type: 'spring' as const, stiffness: 100 }}
 				className='bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10'
 			>
 				<div className='container mx-auto px-3 sm:px-4 py-3 sm:py-4'>
 					<div className='flex items-center justify-between'>
-						<Link href='/dashboard'>
+						<Link href={`/dashboard?month=${month}&year=${year}`}>
 							<motion.div whileHover={{ x: -5 }} whileTap={{ scale: 0.95 }}>
 								<Button
 									variant='ghost'
@@ -299,7 +312,7 @@ export default function BudgetSetupPage() {
 							initial={{ opacity: 0, x: 100 }}
 							animate={{ opacity: 1, x: 0 }}
 							exit={{ opacity: 0, x: -100 }}
-							transition={{ type: 'spring', stiffness: 100 }}
+							transition={{ type: 'spring' as const, stiffness: 100 }}
 						>
 							<Card className='dark:bg-gray-800 dark:border-gray-700'>
 								<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
@@ -311,6 +324,7 @@ export default function BudgetSetupPage() {
 									</CardDescription>
 								</CardHeader>
 								<CardContent className='px-3 sm:px-6 pb-3 sm:pb-6 space-y-4 sm:space-y-6'>
+									{/* Ввод бюджета */}
 									<motion.div
 										initial={{ opacity: 0, y: 20 }}
 										animate={{ opacity: 1, y: 0 }}
@@ -329,6 +343,127 @@ export default function BudgetSetupPage() {
 											min='0'
 											autoFocus
 										/>
+									</motion.div>
+
+									{/* Выбор периода бюджета */}
+									<motion.div
+										initial={{ opacity: 0, y: 20 }}
+										animate={{ opacity: 1, y: 0 }}
+										transition={{ delay: 0.3 }}
+										className='bg-blue-50 dark:bg-blue-900/20 p-4 sm:p-6 rounded-xl space-y-4'
+									>
+										<div>
+											<label className='block text-sm sm:text-base font-medium mb-3 text-gray-700 dark:text-gray-200'>
+												📅 Период бюджета
+											</label>
+											<p className='text-xs sm:text-sm text-gray-600 dark:text-gray-400'>
+												Выберите, с какого по какое число считать ваш месячный бюджет
+											</p>
+										</div>
+
+										<div className='grid grid-cols-2 gap-4'>
+											<div>
+												<label className='block text-xs font-medium mb-2 text-gray-700 dark:text-gray-200'>
+													Начало периода (число)
+												</label>
+												<select
+													value={startDay}
+													onChange={e => setStartDay(parseInt(e.target.value))}
+													className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+												>
+													{Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+														<option key={day} value={day}>
+															{day} число
+														</option>
+													))}
+												</select>
+											</div>
+
+											<div>
+												<label className='block text-xs font-medium mb-2 text-gray-700 dark:text-gray-200'>
+													Конец периода (число)
+												</label>
+												<select
+													value={endDay}
+													onChange={e => setEndDay(parseInt(e.target.value))}
+													className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+												>
+													{Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+														<option key={day} value={day}>
+															{day} число
+														</option>
+													))}
+												</select>
+											</div>
+										</div>
+
+										<div className='p-3 bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-800'>
+											<p className='text-xs sm:text-sm text-gray-700 dark:text-gray-300'>
+												<span className='font-semibold'>Ваш период:</span> с {startDay} по {endDay}{' '}
+												число каждого месяца
+											</p>
+											{startDay > endDay && (
+												<p className='text-xs text-orange-600 dark:text-orange-400 mt-1'>
+													💡 Период переходит на следующий месяц
+												</p>
+											)}
+										</div>
+
+										<div className='space-y-2'>
+											<p className='text-xs font-medium text-gray-700 dark:text-gray-200'>
+												Примеры:
+											</p>
+											<div className='grid grid-cols-2 gap-2'>
+												<Button
+													type='button'
+													variant='outline'
+													size='sm'
+													onClick={() => {
+														setStartDay(1)
+														setEndDay(31)
+													}}
+													className='text-xs dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+												>
+													1-31 (стандарт)
+												</Button>
+												<Button
+													type='button'
+													variant='outline'
+													size='sm'
+													onClick={() => {
+														setStartDay(10)
+														setEndDay(9)
+													}}
+													className='text-xs dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+												>
+													10-9 (ЗП 10-го)
+												</Button>
+												<Button
+													type='button'
+													variant='outline'
+													size='sm'
+													onClick={() => {
+														setStartDay(15)
+														setEndDay(14)
+													}}
+													className='text-xs dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+												>
+													15-14 (ЗП 15-го)
+												</Button>
+												<Button
+													type='button'
+													variant='outline'
+													size='sm'
+													onClick={() => {
+														setStartDay(25)
+														setEndDay(24)
+													}}
+													className='text-xs dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+												>
+													25-24 (ЗП 25-го)
+												</Button>
+											</div>
+										</div>
 									</motion.div>
 
 									{totalBudget && parseFloat(totalBudget) > 0 && (
@@ -405,7 +540,7 @@ export default function BudgetSetupPage() {
 							initial={{ opacity: 0, x: 100 }}
 							animate={{ opacity: 1, x: 0 }}
 							exit={{ opacity: 0, x: -100 }}
-							transition={{ type: 'spring', stiffness: 100 }}
+							transition={{ type: 'spring' as const, stiffness: 100 }}
 							className='space-y-4 sm:space-y-6'
 						>
 							<Card className='dark:bg-gray-800 dark:border-gray-700'>
@@ -658,7 +793,7 @@ export default function BudgetSetupPage() {
 							initial={{ opacity: 0, x: 100 }}
 							animate={{ opacity: 1, x: 0 }}
 							exit={{ opacity: 0, x: -100 }}
-							transition={{ type: 'spring', stiffness: 100 }}
+							transition={{ type: 'spring' as const, stiffness: 100 }}
 						>
 							<Card className='dark:bg-gray-800 dark:border-gray-700'>
 								<CardHeader className='px-3 sm:px-6 py-3 sm:py-6'>
@@ -676,10 +811,28 @@ export default function BudgetSetupPage() {
 										className='bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-6 rounded-xl'
 									>
 										<p className='text-sm text-gray-600 dark:text-gray-400 mb-2'>
-											Общий бюджет на {getMonthName(month)} {year}
+											Общий бюджет на{' '}
+											{startDay > endDay
+												? `${getMonthName(month)}-${getMonthName(
+														month === 12 ? 1 : month + 1
+												  )} ${year}`
+												: `${getMonthName(month)} ${year}`}
 										</p>
 										<p className='text-3xl sm:text-4xl font-bold text-blue-600 dark:text-blue-400'>
 											{formatCurrency(parseFloat(totalBudget))}
+										</p>
+										<p className='text-xs text-gray-600 dark:text-gray-400 mt-2'>
+											Период:{' '}
+											{startDay > endDay ? (
+												<>
+													с {startDay} {getMonthName(month)} по {endDay}{' '}
+													{getMonthName(month === 12 ? 1 : month + 1)}
+												</>
+											) : (
+												<>
+													с {startDay} по {endDay} число
+												</>
+											)}
 										</p>
 									</motion.div>
 

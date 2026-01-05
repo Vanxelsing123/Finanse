@@ -15,6 +15,8 @@ const budgetSchema = z.object({
 	month: z.number().min(1).max(12),
 	year: z.number(),
 	totalAmount: z.number().positive(),
+	startDay: z.number().min(1).max(31).optional().default(1),
+	endDay: z.number().min(1).max(31).optional().default(31),
 	categories: z.array(categorySchema),
 })
 
@@ -41,7 +43,7 @@ export async function GET(request: Request) {
 			include: {
 				categories: {
 					include: {
-						transactions: true, // ✅ Получаем все транзакции
+						transactions: true,
 					},
 				},
 			},
@@ -53,20 +55,19 @@ export async function GET(request: Request) {
 
 		// Подсчитываем потраченное в каждой категории
 		const categoriesWithSpent = budget.categories.map(cat => {
-			// ✅ INCOME вычитаем, EXPENSE добавляем
 			const spent = cat.transactions.reduce((sum, t) => {
 				if (t.type === 'EXPENSE') {
 					return sum + Number(t.amount)
 				} else if (t.type === 'INCOME') {
-					return sum - Number(t.amount) // Вычитаем доходы из расходов (корректировки)
+					return sum - Number(t.amount)
 				}
 				return sum
 			}, 0)
 
 			return {
 				...cat,
-				spent: Math.max(0, spent), // ✅ Не даём уйти в минус
-				transactions: undefined, // убираем транзакции из ответа
+				spent: Math.max(0, spent),
+				transactions: undefined,
 			}
 		})
 
@@ -82,7 +83,7 @@ export async function GET(request: Request) {
 	}
 }
 
-// POST - создать или обновить бюджет
+// POST - создать бюджет
 export async function POST(request: Request) {
 	try {
 		const session = await getServerSession(authOptions)
@@ -91,16 +92,22 @@ export async function POST(request: Request) {
 		}
 
 		const body = await request.json()
-		const { month, year, totalAmount, categories } = budgetSchema.parse(body)
+		const { month, year, totalAmount, startDay, endDay, categories } = budgetSchema.parse(body)
 
-		// Удаляем старый бюджет если есть
-		await prisma.budget.deleteMany({
+		// Проверяем существующий бюджет
+		const existingBudget = await prisma.budget.findUnique({
 			where: {
-				userId: session.user.id,
-				month,
-				year,
+				userId_month_year: {
+					userId: session.user.id,
+					month,
+					year,
+				},
 			},
 		})
+
+		if (existingBudget) {
+			return NextResponse.json({ error: 'Budget for this month already exists' }, { status: 400 })
+		}
 
 		// Создаём новый бюджет с категориями
 		const budget = await prisma.budget.create({
@@ -109,6 +116,8 @@ export async function POST(request: Request) {
 				month,
 				year,
 				totalAmount,
+				startDay,
+				endDay,
 				categories: {
 					create: categories.map(cat => ({
 						name: cat.name,

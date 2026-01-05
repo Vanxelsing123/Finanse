@@ -37,6 +37,8 @@ model Budget {
   month       Int
   year        Int
   totalAmount Decimal  @db.Decimal(10, 2)
+  startDay    Int      @default(1)
+  endDay      Int      @default(31)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
