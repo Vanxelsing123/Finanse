@@ -32,12 +32,18 @@ export async function GET() {
 			},
 		})
 
-		// ✅ Подсчитываем общую статистику
+		// Подсчитываем общую статистику
 		let totalBudget = 0
 		let totalSpent = 0
-		const categoryStats: Record
+		const categoryStats: Record<
 			string,
-			{ name: string; icon: string; color: string; spent: number; budget: number }
+			{
+				name: string
+				icon: string
+				color: string
+				spent: number
+				budget: number
+			}
 		> = {}
 
 		budgets.forEach(budget => {
@@ -71,8 +77,7 @@ export async function GET() {
 		})
 
 		const totalSavings = savings.reduce((sum, s) => {
-			const amount =
-				typeof s.amount === 'string' ? parseFloat(s.amount) : Number(s.amount)
+			const amount = typeof s.amount === 'string' ? parseFloat(s.amount) : Number(s.amount)
 			return sum + amount
 		}, 0)
 
