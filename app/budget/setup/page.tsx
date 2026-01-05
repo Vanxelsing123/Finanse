@@ -7,7 +7,7 @@ import { AnimatePresence, motion, Variants } from 'framer-motion'
 import { ArrowLeft, ArrowRight, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 
 interface Category {
 	id: string
@@ -76,7 +76,7 @@ const modalVariants: Variants = {
 	},
 }
 
-export default function BudgetSetupPage() {
+function BudgetSetupContent() {
 	const router = useRouter()
 	const searchParams = useSearchParams()
 
@@ -1135,5 +1135,19 @@ export default function BudgetSetupPage() {
 				)}
 			</AnimatePresence>
 		</div>
+	)
+}
+
+export default function BudgetSetupPage() {
+	return (
+		<Suspense
+			fallback={
+				<div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800'>
+					<div className='animate-spin rounded-full h-12 w-12 border-b-2 border-primary'></div>
+				</div>
+			}
+		>
+			<BudgetSetupContent />
+		</Suspense>
 	)
 }

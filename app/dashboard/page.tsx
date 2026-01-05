@@ -32,7 +32,7 @@ import {
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 
 interface Category {
 	id: string
@@ -134,7 +134,7 @@ const overlayVariants: Variants = {
 	exit: { opacity: 0 },
 }
 
-export default function DashboardPage() {
+function DashboardContent() {
 	const { data: session, status } = useSession()
 	const router = useRouter()
 	const searchParams = useSearchParams()
@@ -927,5 +927,19 @@ export default function DashboardPage() {
 				)}
 			</motion.div>
 		</div>
+	)
+}
+
+export default function DashboardPage() {
+	return (
+		<Suspense
+			fallback={
+				<div className='min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900'>
+					<div className='animate-spin rounded-full h-12 w-12 border-b-2 border-primary'></div>
+				</div>
+			}
+		>
+			<DashboardContent />
+		</Suspense>
 	)
 }

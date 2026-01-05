@@ -5,9 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ArrowLeft, Calendar, Save } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 
-export default function BudgetPeriodPage() {
+function BudgetPeriodContent() {
 	const router = useRouter()
 	const searchParams = useSearchParams()
 	const month = parseInt(searchParams.get('month') || '1')
@@ -243,5 +243,19 @@ export default function BudgetPeriodPage() {
 				</Card>
 			</main>
 		</div>
+	)
+}
+
+export default function BudgetPeriodPage() {
+	return (
+		<Suspense
+			fallback={
+				<div className='min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900'>
+					<div className='animate-spin rounded-full h-12 w-12 border-b-2 border-primary'></div>
+				</div>
+			}
+		>
+			<BudgetPeriodContent />
+		</Suspense>
 	)
 }
