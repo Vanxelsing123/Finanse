@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { getCurrentMonth } from '@/lib/utils'
+import { getCurrentMonthYear } from '@/lib/utils'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -15,9 +15,16 @@ interface Category {
 	color: string
 }
 
+interface Budget {
+	id: string
+	month: number
+	year: number
+}
+
 export default function NewTransactionPage() {
 	const router = useRouter()
 	const [categories, setCategories] = useState<Category[]>([])
+	const [budget, setBudget] = useState<Budget | null>(null)
 	const [formData, setFormData] = useState({
 		categoryId: '',
 		amount: '',
@@ -35,14 +42,42 @@ export default function NewTransactionPage() {
 
 	const fetchCategories = async () => {
 		try {
-			const { month, year } = getCurrentMonth()
-			const response = await fetch(`/api/budget?month=${month}&year=${year}`)
-			const data = await response.json()
+			// ✅ ИСПРАВЛЕНИЕ 1: Читаем месяц из localStorage
+			let month = getCurrentMonthYear().month
+			let year = getCurrentMonthYear().year
+
+			if (typeof window !== 'undefined') {
+				const savedMonth = localStorage.getItem('lastViewedMonth')
+				if (savedMonth) {
+					try {
+						const parsed = JSON.parse(savedMonth)
+						month = parsed.month
+						year = parsed.year
+					} catch (e) {
+						console.error('Error parsing saved month:', e)
+					}
+				}
+			}
+
+			// ✅ ИСПРАВЛЕНИЕ 2: Пытаемся загрузить бюджет из сохранённого месяца
+			let response = await fetch(`/api/budget?month=${month}&year=${year}`)
+			let data = await response.json()
+
+			// ✅ ИСПРАВЛЕНИЕ 3: Если бюджета нет, пробуем текущий месяц
+			if (!data.budget) {
+				const current = getCurrentMonthYear()
+				response = await fetch(`/api/budget?month=${current.month}&year=${current.year}`)
+				data = await response.json()
+			}
+
 			if (data.budget?.categories) {
+				setBudget(data.budget)
 				setCategories(data.budget.categories)
 				if (data.budget.categories.length > 0) {
 					setFormData(prev => ({ ...prev, categoryId: data.budget.categories[0].id }))
 				}
+			} else {
+				setError('Сначала создайте бюджет')
 			}
 		} catch (error) {
 			console.error('Error fetching categories:', error)
@@ -84,7 +119,12 @@ export default function NewTransactionPage() {
 			const data = await response.json()
 
 			if (response.ok) {
-				router.push('/dashboard')
+				// ✅ ИСПРАВЛЕНИЕ 4: Возвращаемся на правильный месяц
+				if (budget) {
+					router.push(`/dashboard?month=${budget.month}&year=${budget.year}`)
+				} else {
+					router.push('/dashboard')
+				}
 				router.refresh()
 			} else {
 				setError(data.error || 'Ошибка при добавлении транзакции')
@@ -112,7 +152,7 @@ export default function NewTransactionPage() {
 			<header className='bg-white dark:bg-gray-800 shadow-sm'>
 				<div className='container mx-auto px-4 py-4'>
 					<Link href='/dashboard'>
-						<Button variant='ghost' size='sm'>
+						<Button variant='ghost' size='sm' className='dark:text-gray-200 dark:hover:bg-gray-700'>
 							<ArrowLeft className='h-4 w-4 mr-2' />
 							Назад
 						</Button>
@@ -126,7 +166,17 @@ export default function NewTransactionPage() {
 						<CardTitle className='dark:text-white'>Добавить транзакцию</CardTitle>
 					</CardHeader>
 					<CardContent>
-						{categories.length === 0 ? (
+						{error ? (
+							<div className='text-center py-8'>
+								<div className='text-6xl mb-4'>⚠️</div>
+								<p className='text-gray-600 dark:text-gray-300 mb-4 text-lg font-semibold'>
+									{error}
+								</p>
+								<Link href='/budget/setup'>
+									<Button>Создать бюджет</Button>
+								</Link>
+							</div>
+						) : categories.length === 0 ? (
 							<div className='text-center py-8'>
 								<div className='text-6xl mb-4'>💰</div>
 								<p className='text-gray-600 dark:text-gray-300 mb-4'>

@@ -672,9 +672,14 @@ function DashboardContent() {
 												</Button>
 											</motion.div>
 											<Link href='/transactions/new' className='flex-1 xs:flex-initial'>
-												<motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+												<motion.div
+													whileHover={{ scale: 1.05 }}
+													whileTap={{ scale: 0.95 }}
+													className='flex-1 xs:flex-initial'
+												>
 													<Button
 														size='sm'
+														onClick={() => router.push('/transactions/new')}
 														className='text-xs sm:text-sm h-8 sm:h-9 w-full xs:w-auto'
 													>
 														<Plus className='h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2' />
@@ -751,7 +756,10 @@ function DashboardContent() {
 															<motion.button
 																whileHover={{ scale: 1.1 }}
 																whileTap={{ scale: 0.9 }}
-																onClick={() => handleEditCategory(category)}
+																onClick={e => {
+																	e.stopPropagation()
+																	handleEditCategory(category)
+																}}
 																className='p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-colors'
 																title='Редактировать'
 															>
@@ -926,6 +934,342 @@ function DashboardContent() {
 					</motion.div>
 				)}
 			</motion.div>
+			<AnimatePresence>
+				{editingCategory && (
+					<motion.div
+						variants={overlayVariants}
+						initial='hidden'
+						animate='visible'
+						exit='exit'
+						className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4'
+						onClick={() => {
+							setEditingCategory(null)
+							setNewBudgetAmount('')
+							setNewSpentAmount('')
+						}}
+					>
+						<motion.div
+							variants={modalVariants}
+							initial='hidden'
+							animate='visible'
+							exit='exit'
+							onClick={e => e.stopPropagation()}
+							className='w-full max-w-md'
+						>
+							<Card className='dark:bg-gray-800 dark:border-gray-700'>
+								<CardHeader className='pb-3'>
+									<div className='flex items-center justify-between'>
+										<CardTitle className='text-base sm:text-lg dark:text-white'>
+											Редактировать категорию
+										</CardTitle>
+										<Button
+											variant='ghost'
+											size='icon'
+											onClick={() => {
+												setEditingCategory(null)
+												setNewBudgetAmount('')
+												setNewSpentAmount('')
+											}}
+											className='dark:hover:bg-gray-700 h-8 w-8'
+										>
+											<X className='h-4 w-4' />
+										</Button>
+									</div>
+								</CardHeader>
+								<CardContent className='space-y-4'>
+									<div>
+										<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
+											Название категории
+										</label>
+										<div className='flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg'>
+											<div
+												className='w-10 h-10 rounded-full flex items-center justify-center text-2xl'
+												style={{ backgroundColor: `${editingCategory.color}20` }}
+											>
+												{editingCategory.icon}
+											</div>
+											<p className='font-medium text-gray-900 dark:text-white'>
+												{editingCategory.name}
+											</p>
+										</div>
+									</div>
+
+									<div>
+										<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
+											Бюджет категории (BYN)
+										</label>
+										<input
+											type='number'
+											value={newBudgetAmount}
+											onChange={e => setNewBudgetAmount(e.target.value)}
+											className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+											placeholder={editingCategory.budgetAmount.toString()}
+											step='0.01'
+											min='0'
+										/>
+										<p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+											Текущий бюджет: {formatCurrency(editingCategory.budgetAmount)}
+										</p>
+									</div>
+
+									<div>
+										<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
+											Потрачено (BYN)
+										</label>
+										<input
+											type='number'
+											value={newSpentAmount}
+											onChange={e => setNewSpentAmount(e.target.value)}
+											className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+											placeholder={editingCategory.spent.toString()}
+											step='0.01'
+											min='0'
+										/>
+										<p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+											Текущая сумма: {formatCurrency(editingCategory.spent)}
+										</p>
+									</div>
+
+									<div className='bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg'>
+										<p className='text-xs text-blue-800 dark:text-blue-200'>
+											💡 Оставьте поле пустым, чтобы не менять значение
+										</p>
+									</div>
+
+									<div className='flex gap-2 pt-2'>
+										<Button onClick={handleUpdateCategory} className='flex-1'>
+											Сохранить
+										</Button>
+										<Button
+											variant='outline'
+											onClick={() => {
+												setEditingCategory(null)
+												setNewBudgetAmount('')
+												setNewSpentAmount('')
+											}}
+											className='flex-1 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+										>
+											Отмена
+										</Button>
+									</div>
+								</CardContent>
+							</Card>
+						</motion.div>
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			{/* ✅ ДОБАВЬТЕ МОДАЛЬНОЕ ОКНО ДОБАВЛЕНИЯ КАТЕГОРИИ */}
+			<AnimatePresence>
+				{showAddCategory && (
+					<motion.div
+						variants={overlayVariants}
+						initial='hidden'
+						animate='visible'
+						exit='exit'
+						className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4'
+						onClick={() => {
+							setShowAddCategory(false)
+							setNewCategory({ name: '', icon: '📦', color: '#6b7280', budgetAmount: 0 })
+						}}
+					>
+						<motion.div
+							variants={modalVariants}
+							initial='hidden'
+							animate='visible'
+							exit='exit'
+							onClick={e => e.stopPropagation()}
+							className='w-full max-w-md'
+						>
+							<Card className='dark:bg-gray-800 dark:border-gray-700'>
+								<CardHeader className='pb-3'>
+									<div className='flex items-center justify-between'>
+										<CardTitle className='text-base sm:text-lg dark:text-white'>
+											Добавить категорию
+										</CardTitle>
+										<Button
+											variant='ghost'
+											size='icon'
+											onClick={() => {
+												setShowAddCategory(false)
+												setNewCategory({ name: '', icon: '📦', color: '#6b7280', budgetAmount: 0 })
+											}}
+											className='dark:hover:bg-gray-700 h-8 w-8'
+										>
+											<X className='h-4 w-4' />
+										</Button>
+									</div>
+								</CardHeader>
+								<CardContent className='space-y-4'>
+									<div>
+										<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
+											Название категории
+										</label>
+										<input
+											type='text'
+											value={newCategory.name}
+											onChange={e => setNewCategory({ ...newCategory, name: e.target.value })}
+											className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+											placeholder='Например: Кафе'
+											autoFocus
+										/>
+									</div>
+
+									<div>
+										<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
+											Выберите иконку
+										</label>
+										<div className='grid grid-cols-6 gap-2'>
+											{['🛒', '🚗', '🏠', '💊', '👔', '🎮', '📚', '🍔', '✈️', '🎬', '💰', '📦'].map(
+												emoji => (
+													<button
+														key={emoji}
+														type='button'
+														onClick={() => setNewCategory({ ...newCategory, icon: emoji })}
+														className={`p-3 text-2xl rounded-lg border-2 transition-all ${
+															newCategory.icon === emoji
+																? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+																: 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+														}`}
+													>
+														{emoji}
+													</button>
+												)
+											)}
+										</div>
+									</div>
+
+									<div>
+										<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
+											Выберите цвет
+										</label>
+										<div className='grid grid-cols-6 gap-2'>
+											{[
+												'#ef4444',
+												'#f97316',
+												'#f59e0b',
+												'#84cc16',
+												'#22c55e',
+												'#10b981',
+												'#14b8a6',
+												'#06b6d4',
+												'#3b82f6',
+												'#6366f1',
+												'#8b5cf6',
+												'#ec4899',
+											].map(color => (
+												<button
+													key={color}
+													type='button'
+													onClick={() => setNewCategory({ ...newCategory, color })}
+													className={`w-10 h-10 rounded-lg border-2 transition-all ${
+														newCategory.color === color
+															? 'border-gray-900 dark:border-white ring-2 ring-offset-2 ring-gray-900 dark:ring-white'
+															: 'border-gray-200 dark:border-gray-700'
+													}`}
+													style={{ backgroundColor: color }}
+												/>
+											))}
+										</div>
+									</div>
+
+									<div>
+										<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
+											Бюджет категории (BYN)
+										</label>
+										<input
+											type='number'
+											value={newCategory.budgetAmount || ''}
+											onChange={e =>
+												setNewCategory({
+													...newCategory,
+													budgetAmount: parseFloat(e.target.value) || 0,
+												})
+											}
+											className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+											placeholder='500.00'
+											step='0.01'
+											min='0'
+										/>
+									</div>
+
+									<div className='flex gap-2 pt-2'>
+										<Button
+											onClick={handleAddCategory}
+											disabled={
+												!newCategory.name ||
+												!newCategory.icon ||
+												!newCategory.color ||
+												newCategory.budgetAmount <= 0
+											}
+											className='flex-1'
+										>
+											Добавить
+										</Button>
+										<Button
+											variant='outline'
+											onClick={() => {
+												setShowAddCategory(false)
+												setNewCategory({ name: '', icon: '📦', color: '#6b7280', budgetAmount: 0 })
+											}}
+											className='flex-1 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+										>
+											Отмена
+										</Button>
+									</div>
+								</CardContent>
+							</Card>
+						</motion.div>
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			{/* ✅ ДОБАВЬТЕ МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ УДАЛЕНИЯ */}
+			<AnimatePresence>
+				{showDeleteConfirm && (
+					<motion.div
+						variants={overlayVariants}
+						initial='hidden'
+						animate='visible'
+						exit='exit'
+						className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4'
+						onClick={() => setShowDeleteConfirm(null)}
+					>
+						<motion.div
+							variants={modalVariants}
+							initial='hidden'
+							animate='visible'
+							exit='exit'
+							onClick={e => e.stopPropagation()}
+							className='w-full max-w-md'
+						>
+							<Card className='dark:bg-gray-800 dark:border-gray-700'>
+								<CardHeader>
+									<CardTitle className='text-lg dark:text-white'>Удалить категорию?</CardTitle>
+									<CardDescription className='dark:text-gray-400'>
+										Вы действительно хотите удалить категорию "{showDeleteConfirm.name}"? Все
+										транзакции этой категории будут также удалены.
+									</CardDescription>
+								</CardHeader>
+								<CardContent>
+									<div className='flex gap-2'>
+										<Button variant='destructive' onClick={handleDeleteCategory} className='flex-1'>
+											Удалить
+										</Button>
+										<Button
+											variant='outline'
+											onClick={() => setShowDeleteConfirm(null)}
+											className='flex-1 dark:border-gray-600 dark:text-gray-200'
+										>
+											Отмена
+										</Button>
+									</div>
+								</CardContent>
+							</Card>
+						</motion.div>
+					</motion.div>
+				)}
+			</AnimatePresence>
 		</div>
 	)
 }
