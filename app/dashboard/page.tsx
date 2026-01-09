@@ -934,6 +934,7 @@ function DashboardContent() {
 					</motion.div>
 				)}
 			</motion.div>
+			{/* ✅ УЛУЧШЕННОЕ МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ КАТЕГОРИИ */}
 			<AnimatePresence>
 				{editingCategory && (
 					<motion.div
@@ -977,10 +978,8 @@ function DashboardContent() {
 									</div>
 								</CardHeader>
 								<CardContent className='space-y-4'>
+									{/* Информация о категории */}
 									<div>
-										<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
-											Название категории
-										</label>
 										<div className='flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg'>
 											<div
 												className='w-10 h-10 rounded-full flex items-center justify-center text-2xl'
@@ -988,12 +987,19 @@ function DashboardContent() {
 											>
 												{editingCategory.icon}
 											</div>
-											<p className='font-medium text-gray-900 dark:text-white'>
-												{editingCategory.name}
-											</p>
+											<div>
+												<p className='font-medium text-gray-900 dark:text-white'>
+													{editingCategory.name}
+												</p>
+												<p className='text-xs text-gray-500 dark:text-gray-400'>
+													Осталось:{' '}
+													{formatCurrency(editingCategory.budgetAmount - editingCategory.spent)}
+												</p>
+											</div>
 										</div>
 									</div>
 
+									{/* Изменение бюджета */}
 									<div>
 										<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
 											Бюджет категории (BYN)
@@ -1012,32 +1018,159 @@ function DashboardContent() {
 										</p>
 									</div>
 
+									{/* ✅ УЛУЧШЕННОЕ ИЗМЕНЕНИЕ ПОТРАЧЕННОЙ СУММЫ */}
 									<div>
 										<label className='block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200'>
-											Потрачено (BYN)
+											Изменить потраченную сумму
 										</label>
-										<input
-											type='number'
-											value={newSpentAmount}
-											onChange={e => setNewSpentAmount(e.target.value)}
-											className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
-											placeholder={editingCategory.spent.toString()}
-											step='0.01'
-											min='0'
-										/>
-										<p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
-											Текущая сумма: {formatCurrency(editingCategory.spent)}
-										</p>
+
+										{/* Текущая потраченная сумма */}
+										<div className='bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg mb-3'>
+											<div className='text-center'>
+												<p className='text-xs text-gray-600 dark:text-gray-400'>Текущая сумма</p>
+												<p className='text-2xl font-bold text-gray-900 dark:text-white'>
+													{formatCurrency(editingCategory.spent)}
+												</p>
+											</div>
+										</div>
+
+										{/* Поле для ввода суммы */}
+										<div className='space-y-2'>
+											<input
+												type='number'
+												value={newSpentAmount}
+												onChange={e => setNewSpentAmount(e.target.value)}
+												className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center text-lg'
+												placeholder='0.00'
+												step='0.01'
+												min='0'
+											/>
+
+											{/* Кнопки + и - */}
+											<div className='grid grid-cols-2 gap-2'>
+												<Button
+													type='button'
+													variant='outline'
+													onClick={() => {
+														const amount = parseFloat(newSpentAmount) || 0
+														if (amount > 0) {
+															const newTotal = editingCategory.spent + amount
+															setEditingCategory({
+																...editingCategory,
+																spent: newTotal,
+															})
+															setNewSpentAmount('')
+														}
+													}}
+													className='text-green-600 border-green-600 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-900/20'
+													disabled={!newSpentAmount || parseFloat(newSpentAmount) <= 0}
+												>
+													<Plus className='h-4 w-4 mr-2' />
+													Добавить
+												</Button>
+												<Button
+													type='button'
+													variant='outline'
+													onClick={() => {
+														const amount = parseFloat(newSpentAmount) || 0
+														if (amount > 0) {
+															const newTotal = Math.max(0, editingCategory.spent - amount)
+															setEditingCategory({
+																...editingCategory,
+																spent: newTotal,
+															})
+															setNewSpentAmount('')
+														}
+													}}
+													className='text-red-600 border-red-600 hover:bg-red-50 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-900/20'
+													disabled={!newSpentAmount || parseFloat(newSpentAmount) <= 0}
+												>
+													<X className='h-4 w-4 mr-2' />
+													Отнять
+												</Button>
+											</div>
+
+											{/* Быстрые суммы */}
+											<div className='grid grid-cols-4 gap-2'>
+												{[10, 20, 50, 100].map(quickAmount => (
+													<Button
+														key={quickAmount}
+														type='button'
+														variant='ghost'
+														size='sm'
+														onClick={() => setNewSpentAmount(quickAmount.toString())}
+														className='text-xs dark:hover:bg-gray-700'
+													>
+														{quickAmount}
+													</Button>
+												))}
+											</div>
+										</div>
+
+										{/* Предпросмотр новой суммы */}
+										{newSpentAmount && parseFloat(newSpentAmount) > 0 && (
+											<motion.div
+												initial={{ opacity: 0, y: -10 }}
+												animate={{ opacity: 1, y: 0 }}
+												className='bg-gray-50 dark:bg-gray-700 p-3 rounded-lg mt-2'
+											>
+												<div className='flex justify-between text-sm'>
+													<span className='text-gray-600 dark:text-gray-400'>После изменения:</span>
+													<div className='text-right'>
+														<p className='font-semibold text-gray-900 dark:text-white'>
+															{formatCurrency(editingCategory.spent)} →{' '}
+															<span className='text-blue-600 dark:text-blue-400'>
+																{formatCurrency(editingCategory.spent + parseFloat(newSpentAmount))}
+															</span>
+														</p>
+													</div>
+												</div>
+											</motion.div>
+										)}
 									</div>
 
 									<div className='bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg'>
 										<p className='text-xs text-blue-800 dark:text-blue-200'>
-											💡 Оставьте поле пустым, чтобы не менять значение
+											💡 Введите сумму и нажмите "Добавить" чтобы увеличить потраченное, или
+											"Отнять" чтобы уменьшить
 										</p>
 									</div>
 
+									{/* Кнопки сохранения */}
 									<div className='flex gap-2 pt-2'>
-										<Button onClick={handleUpdateCategory} className='flex-1'>
+										<Button
+											onClick={async () => {
+												if (!editingCategory) return
+
+												try {
+													const response = await fetch('/api/budget/category', {
+														method: 'PATCH',
+														headers: { 'Content-Type': 'application/json' },
+														body: JSON.stringify({
+															categoryId: editingCategory.id,
+															budgetAmount: newBudgetAmount
+																? parseFloat(newBudgetAmount)
+																: undefined,
+															spent: editingCategory.spent, // ✅ Отправляем обновлённую сумму
+														}),
+													})
+
+													if (response.ok) {
+														setEditingCategory(null)
+														setNewBudgetAmount('')
+														setNewSpentAmount('')
+														fetchData()
+													} else {
+														const data = await response.json()
+														alert(data.error || 'Ошибка при обновлении')
+													}
+												} catch (error) {
+													console.error('Error updating category:', error)
+													alert('Ошибка при обновлении категории')
+												}
+											}}
+											className='flex-1'
+										>
 											Сохранить
 										</Button>
 										<Button
@@ -1059,7 +1192,6 @@ function DashboardContent() {
 				)}
 			</AnimatePresence>
 
-			{/* ✅ ДОБАВЬТЕ МОДАЛЬНОЕ ОКНО ДОБАВЛЕНИЯ КАТЕГОРИИ */}
 			<AnimatePresence>
 				{showAddCategory && (
 					<motion.div
@@ -1224,7 +1356,6 @@ function DashboardContent() {
 				)}
 			</AnimatePresence>
 
-			{/* ✅ ДОБАВЬТЕ МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ УДАЛЕНИЯ */}
 			<AnimatePresence>
 				{showDeleteConfirm && (
 					<motion.div
